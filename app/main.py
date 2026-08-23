@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from app.api.customer import router as customer_router
 from app.api.investigation import router as investigation_router
 from app.api.decision import router as decision_router
+from app.api.user import router as user_router
+from app.api.auth import router as auth_router
 
 from app.database.connection import engine, Base
 from app.database.models import (
@@ -32,6 +34,8 @@ Base.metadata.create_all(bind=engine)
 app.include_router(customer_router)
 app.include_router(investigation_router)
 app.include_router(decision_router)
+app.include_router(user_router)
+app.include_router(auth_router)
 
 
 @app.exception_handler(Exception)

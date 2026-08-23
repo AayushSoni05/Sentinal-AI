@@ -8,6 +8,14 @@ from app.schemas.customer import (
     CustomerUpdate
 )
 
+from app.auth.roles import (
+    require_maker,
+    require_checker,
+    require_admin
+)
+
+from app.database.models import User
+
 from app.services.customer_service import (
     create_new_customer,
     get_customer_service,
@@ -37,7 +45,8 @@ def get_db():
 @router.post("/customers")
 def create_customer(
     request: CustomerRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     customer = create_new_customer(
         db=db,
@@ -58,6 +67,7 @@ def create_customer(
         "gst_cin": customer.gst_cin,
         "status": customer.status,
         "created_at": customer.created_at,
+        "created_by": current_user.username,
         "message": "Customer created successfully"
     }
 
@@ -73,7 +83,8 @@ def search_customers(
     status: str | None = None,
     pan: str | None = None,
     customer_type: str | None = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     customers = search_customers_service(
         db=db,
@@ -107,7 +118,8 @@ def search_customers(
 @router.get("/customers/{customer_number}")
 def get_customer(
     customer_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     customer = get_customer_service(
         db=db,
@@ -142,7 +154,8 @@ def get_customer(
 )
 def get_customer_investigations(
     customer_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     investigations, error = get_customer_investigations_service(
         db=db,
@@ -176,7 +189,8 @@ def get_customer_investigations(
 def update_customer(
     customer_number: str,
     request: CustomerUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     customer = update_customer_service(
         db=db,
@@ -203,31 +217,42 @@ def update_customer(
         "pan": customer.pan,
         "gst_cin": customer.gst_cin,
         "status": customer.status,
+        "updated_by": current_user.username,
         "message": "Customer updated successfully"
     }
 
 
 # ============================================================
-# DELETE CUSTOMER
+# DELETE / DEACTIVATE CUSTOMER
 # ============================================================
 
 @router.delete("/customers/{customer_number}")
 def delete_customer(
     customer_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
-    customer = delete_customer_service(
+    customer, error = delete_customer_service(
         db=db,
         customer_number=customer_number
     )
 
     if customer is None:
+
+        if error == "Customer not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
         raise HTTPException(
-            status_code=404,
-            detail="Customer not found"
+            status_code=400,
+            detail=error
         )
 
     return {
         "customer_number": customer.customer_number,
-        "message": "Customer deleted successfully"
+        "status": customer.status,
+        "updated_by": current_user.username,
+        "message": "Customer deactivated successfully"
     }

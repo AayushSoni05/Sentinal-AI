@@ -6,6 +6,10 @@ from sqlalchemy.orm import relationship
 from app.database.connection import Base
 
 
+# ============================================================
+# CUSTOMER
+# ============================================================
+
 class Customer(Base):
 
     __tablename__ = "customers"
@@ -67,6 +71,10 @@ class Customer(Base):
     )
 
 
+# ============================================================
+# INVESTIGATION
+# ============================================================
+
 class Investigation(Base):
 
     __tablename__ = "investigations"
@@ -118,6 +126,10 @@ class Investigation(Base):
         default=datetime.utcnow
     )
 
+
+# ============================================================
+# INVESTIGATION DECISION
+# ============================================================
 
 class InvestigationDecision(Base):
 
@@ -171,4 +183,93 @@ class InvestigationDecision(Base):
     investigation = relationship(
         "Investigation",
         back_populates="decision"
+    )
+
+
+# ============================================================
+# ROLE
+# ============================================================
+
+class Role(Base):
+
+    __tablename__ = "roles"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    name = Column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False
+    )
+
+    description = Column(
+        String,
+        nullable=True
+    )
+
+    users = relationship(
+        "User",
+        back_populates="role"
+    )
+
+
+# ============================================================
+# USER
+# ============================================================
+
+class User(Base):
+
+    __tablename__ = "users"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    username = Column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False
+    )
+
+    email = Column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False
+    )
+
+    password_hash = Column(
+        String,
+        nullable=False
+    )
+
+    role_id = Column(
+        String,
+        ForeignKey("roles.id"),
+        nullable=False,
+        index=True
+    )
+
+    status = Column(
+        String,
+        nullable=False,
+        default="Active"
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    role = relationship(
+        "Role",
+        back_populates="users"
     )

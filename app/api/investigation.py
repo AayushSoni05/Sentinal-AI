@@ -8,6 +8,13 @@ from app.schemas.investigation import (
     InvestigationUpdate
 )
 
+from app.auth.roles import (
+    require_maker,
+    require_checker
+)
+
+from app.database.models import User
+
 from app.services.investigation_service import (
     create_new_investigation,
     get_investigation_service,
@@ -37,7 +44,8 @@ def get_db():
 @router.post("/investigations")
 def create_investigation(
     request: InvestigationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation = create_new_investigation(
         db=db,
@@ -57,6 +65,7 @@ def create_investigation(
         "customer_id": investigation.customer_id,
         "company_name": investigation.company_name,
         "status": investigation.status,
+        "created_by": current_user.username,
         "message": "Investigation created successfully"
     }
 
@@ -71,7 +80,8 @@ def search_investigations(
     customer_number: str | None = None,
     investigation_number: str | None = None,
     company_name: str | None = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     investigations = search_investigations_service(
         db=db,
@@ -101,7 +111,8 @@ def search_investigations(
 @router.get("/investigations/{investigation_number}")
 def get_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     investigation = get_investigation_service(
         db=db,
@@ -132,7 +143,8 @@ def get_investigation(
 def update_investigation(
     investigation_number: str,
     request: InvestigationUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation = update_investigation_service(
         db=db,
@@ -152,6 +164,7 @@ def update_investigation(
         "customer_id": investigation.customer_id,
         "company_name": investigation.company_name,
         "status": investigation.status,
+        "updated_by": current_user.username,
         "message": "Investigation updated successfully"
     }
 
@@ -163,7 +176,8 @@ def update_investigation(
 @router.delete("/investigations/{investigation_number}")
 def delete_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation = delete_investigation_service(
         db=db,
@@ -178,18 +192,20 @@ def delete_investigation(
 
     return {
         "investigation_number": investigation.investigation_number,
+        "deleted_by": current_user.username,
         "message": "Investigation deleted successfully"
     }
 
 
 # ============================================================
-# INVESTIGATION LIFECYCLE
+# SUBMIT INVESTIGATION
 # ============================================================
 
 @router.post("/investigations/{investigation_number}/submit")
 def submit_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation, error = change_investigation_status(
         db=db,
@@ -213,14 +229,20 @@ def submit_investigation(
         "investigation_number": investigation.investigation_number,
         "customer_id": investigation.customer_id,
         "status": investigation.status,
+        "submitted_by": current_user.username,
         "message": "Investigation submitted successfully"
     }
 
 
+# ============================================================
+# MOVE TO REVIEW
+# ============================================================
+
 @router.post("/investigations/{investigation_number}/review")
 def review_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
 ):
     investigation, error = change_investigation_status(
         db=db,
@@ -244,14 +266,20 @@ def review_investigation(
         "investigation_number": investigation.investigation_number,
         "customer_id": investigation.customer_id,
         "status": investigation.status,
+        "reviewed_by": current_user.username,
         "message": "Investigation moved to review"
     }
 
 
+# ============================================================
+# START INVESTIGATION
+# ============================================================
+
 @router.post("/investigations/{investigation_number}/start")
 def start_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation, error = change_investigation_status(
         db=db,
@@ -275,14 +303,20 @@ def start_investigation(
         "investigation_number": investigation.investigation_number,
         "customer_id": investigation.customer_id,
         "status": investigation.status,
+        "started_by": current_user.username,
         "message": "Investigation started successfully"
     }
 
 
+# ============================================================
+# MOVE TO DECISION
+# ============================================================
+
 @router.post("/investigations/{investigation_number}/decision")
 def move_to_decision(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation, error = change_investigation_status(
         db=db,
@@ -306,18 +340,20 @@ def move_to_decision(
         "investigation_number": investigation.investigation_number,
         "customer_id": investigation.customer_id,
         "status": investigation.status,
+        "moved_by": current_user.username,
         "message": "Investigation moved to decision"
     }
 
 
 # ============================================================
-# CANCEL — AVAILABLE FROM ANY NON-CANCELLED STATUS
+# CANCEL INVESTIGATION
 # ============================================================
 
 @router.post("/investigations/{investigation_number}/cancel")
 def cancel_investigation(
     investigation_number: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_maker)
 ):
     investigation, error = change_investigation_status(
         db=db,
@@ -341,5 +377,6 @@ def cancel_investigation(
         "investigation_number": investigation.investigation_number,
         "customer_id": investigation.customer_id,
         "status": investigation.status,
+        "cancelled_by": current_user.username,
         "message": "Investigation cancelled successfully"
     }

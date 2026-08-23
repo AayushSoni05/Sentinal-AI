@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from app.database.models import (
     Customer,
     Investigation,
-    InvestigationDecision
+    InvestigationDecision,
+    Role,
+    User
 )
 
 
@@ -48,6 +50,70 @@ def create_investigation(
     db.refresh(investigation)
 
     return investigation
+
+# ============================================================
+# SAFE INVESTIGATION CREATION
+# ============================================================
+
+def create_investigation_with_next_number(
+    db: Session,
+    investigation_id: str,
+    prefix: str,
+    company_name: str,
+    customer_id: str
+):
+    from sqlalchemy import text
+
+    try:
+        # SQLite: lock the database for writing before
+        # calculating the next investigation number.
+        db.execute(
+            text("BEGIN IMMEDIATE")
+        )
+
+        latest_investigation = (
+            db.query(Investigation)
+            .filter(
+                Investigation.investigation_number.like(
+                    f"{prefix}%"
+                )
+            )
+            .order_by(
+                desc(Investigation.investigation_number)
+            )
+            .first()
+        )
+
+        if latest_investigation is None:
+            next_number = 1
+        else:
+            last_number = int(
+                latest_investigation.investigation_number.split("-")[-1]
+            )
+
+            next_number = last_number + 1
+
+        investigation_number = (
+            f"{prefix}{next_number:06d}"
+        )
+
+        investigation = Investigation(
+            id=investigation_id,
+            investigation_number=investigation_number,
+            customer_id=customer_id,
+            company_name=company_name,
+            status="Draft"
+        )
+
+        db.add(investigation)
+        db.commit()
+        db.refresh(investigation)
+
+        return investigation
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_all_investigations(
@@ -210,6 +276,76 @@ def create_customer(
     db.refresh(customer)
 
     return customer
+
+# ============================================================
+# SAFE CUSTOMER CREATION
+# ============================================================
+
+def create_customer_with_next_number(
+    db: Session,
+    customer_id: str,
+    prefix: str,
+    name: str,
+    customer_type: str,
+    country: str,
+    pan: str | None = None,
+    gst_cin: str | None = None
+):
+    from sqlalchemy import text
+
+    try:
+        # SQLite: lock the database for writing before
+        # calculating the next customer number.
+        db.execute(
+            text("BEGIN IMMEDIATE")
+        )
+
+        latest_customer = (
+            db.query(Customer)
+            .filter(
+                Customer.customer_number.like(
+                    f"{prefix}%"
+                )
+            )
+            .order_by(
+                desc(Customer.customer_number)
+            )
+            .first()
+        )
+
+        if latest_customer is None:
+            next_number = 1
+        else:
+            last_number = int(
+                latest_customer.customer_number.split("-")[-1]
+            )
+
+            next_number = last_number + 1
+
+        customer_number = (
+            f"{prefix}{next_number:06d}"
+        )
+
+        customer = Customer(
+            id=customer_id,
+            customer_number=customer_number,
+            name=name,
+            customer_type=customer_type,
+            country=country,
+            pan=pan,
+            gst_cin=gst_cin,
+            status="Active"
+        )
+
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+
+        return customer
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_all_customers(
@@ -430,3 +566,117 @@ def update_investigation_decision(
     db.refresh(decision)
 
     return decision
+
+# ============================================================
+# USER FUNCTIONS
+# ============================================================
+
+def get_role_by_name(
+    db: Session,
+    role_name: str
+):
+    return (
+        db.query(Role)
+        .filter(
+            Role.name == role_name
+        )
+        .first()
+    )
+
+
+def get_user_by_username(
+    db: Session,
+    username: str
+):
+    return (
+        db.query(User)
+        .filter(
+            User.username == username
+        )
+        .first()
+    )
+
+
+def get_user_by_email(
+    db: Session,
+    email: str
+):
+    return (
+        db.query(User)
+        .filter(
+            User.email == email
+        )
+        .first()
+    )
+
+
+def create_user(
+    db: Session,
+    user_id: str,
+    username: str,
+    email: str,
+    password_hash: str,
+    role_id: str
+):
+    user = User(
+        id=user_id,
+        username=username,
+        email=email,
+        password_hash=password_hash,
+        role_id=role_id,
+        status="Active"
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+# ============================================================
+# ATOMIC APPROVED DECISION
+# ============================================================
+
+def finalize_approved_decision(
+    db: Session,
+    investigation_id: str,
+    customer_number: str,
+    customer_status: str,
+    reason: str
+):
+    decision = get_investigation_decision(
+        db=db,
+        investigation_id=investigation_id
+    )
+
+    if decision is None:
+        return None, None
+
+    customer = get_customer_by_number(
+        db=db,
+        customer_number=customer_number
+    )
+
+    if customer is None:
+        return None, None
+
+    try:
+        # Update customer
+        customer.status = customer_status
+
+        # Update decision
+        decision.approval_status = "Approved"
+        decision.approver_decision = "Approved"
+        decision.reason = reason
+
+        # One commit for both changes
+        db.commit()
+
+        db.refresh(customer)
+        db.refresh(decision)
+
+        return customer, decision
+
+    except Exception:
+        db.rollback()
+        raise

@@ -7,7 +7,7 @@ from app.database.repository import (
     get_investigation_decision,
     update_investigation_decision,
     get_investigation_by_number,
-    update_customer_status
+    finalize_approved_decision
 )
 
 from app.utils.logger import logger
@@ -161,9 +161,7 @@ def submit_analyst_decision(
     if decision is None:
         return None, "Decision not found"
 
-    # Pending is the normal state.
-    # Returned means the approver sent it back for more work.
-    if decision.approval_status not in {"Pending"}:
+    if decision.approval_status != "Pending":
         return None, "Decision is already processed"
 
     if analyst_decision not in ALLOWED_ANALYST_DECISIONS:
@@ -173,8 +171,7 @@ def submit_analyst_decision(
         db=db,
         investigation_id=investigation.id,
         analyst_decision=analyst_decision,
-        reason=reason,
-        approver_decision=None
+        reason=reason
     )
 
     logger.info(
@@ -187,13 +184,14 @@ def submit_analyst_decision(
 
 
 # ============================================================
-# FINAL APPROVER DECISION
+# FINAL CHECKER DECISION
 # ============================================================
 
 def approve_decision(
     db: Session,
     investigation_number: str,
-    approver_decision: str
+    approver_decision: str,
+    reason: str | None = None
 ):
     investigation = get_investigation_by_number(
         db=db,
@@ -222,6 +220,9 @@ def approve_decision(
     if approver_decision not in ALLOWED_APPROVER_DECISIONS:
         return None, "Invalid approver decision"
 
+    if not reason or not reason.strip():
+        return None, "Checker reason is required"
+
     # --------------------------------------------------------
     # RETURNED
     # --------------------------------------------------------
@@ -230,12 +231,14 @@ def approve_decision(
         decision = update_investigation_decision(
             db=db,
             investigation_id=investigation.id,
-            approver_decision="Returned"
+            approver_decision="Returned",
+            reason=reason
         )
 
         logger.info(
             f"Decision returned for further review: "
-            f"{investigation.investigation_number}"
+            f"{investigation.investigation_number} | "
+            f"Reason: {reason}"
         )
 
         return decision, None
@@ -249,13 +252,15 @@ def approve_decision(
             db=db,
             investigation_id=investigation.id,
             approval_status="Rejected",
-            approver_decision="Rejected"
+            approver_decision="Rejected",
+            reason=reason
         )
 
         logger.info(
             f"Recommendation rejected: "
             f"{investigation.investigation_number} | "
-            f"Recommendation: {decision.recommendation}"
+            f"Recommendation: {decision.recommendation} | "
+            f"Reason: {reason}"
         )
 
         return decision, None
@@ -269,45 +274,43 @@ def approve_decision(
             decision.recommendation
         )
 
-        if new_customer_status is None:
-            return (
-                None,
-                "No customer action defined for recommendation"
-            )
-
-        customer = investigation.customer
-
-        if customer is None:
-            return (
-                None,
-                "Customer linked to investigation not found"
-            )
-
-        updated_customer = update_customer_status(
-            db=db,
-            customer_number=customer.customer_number,
-            status=new_customer_status
+    if new_customer_status is None:
+        return (
+            None,
+            "No customer action defined for recommendation"
         )
 
-        if updated_customer is None:
-            return (
-                None,
-                "Customer not found"
-            )
+    customer = investigation.customer
 
-        decision = update_investigation_decision(
+    if customer is None:
+        return (
+            None,
+            "Customer linked to investigation not found"
+        )
+
+    updated_customer, finalized_decision = (
+        finalize_approved_decision(
             db=db,
             investigation_id=investigation.id,
-            approval_status="Approved",
-            approver_decision="Approved"
+            customer_number=customer.customer_number,
+            customer_status=new_customer_status,
+            reason=reason
+        )
+    )
+
+    if updated_customer is None or finalized_decision is None:
+        return (
+            None,
+            "Unable to finalize approved decision"
         )
 
-        logger.info(
-            f"Final decision approved: "
-            f"{investigation.investigation_number} | "
-            f"Recommendation: {decision.recommendation} | "
-            f"Customer: {customer.customer_number} | "
-            f"New Status: {new_customer_status}"
-        )
+    logger.info(
+        f"Final decision approved: "
+        f"{investigation.investigation_number} | "
+        f"Recommendation: {finalized_decision.recommendation} | "
+        f"Customer: {updated_customer.customer_number} | "
+        f"New Status: {updated_customer.status} | "
+        f"Reason: {reason}"
+    )
 
-        return decision, None
+    return finalized_decision, None

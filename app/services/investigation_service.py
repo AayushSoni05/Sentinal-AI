@@ -4,8 +4,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.database.repository import (
-    get_latest_investigation_number,
-    create_investigation,
+    create_investigation_with_next_number,
     get_all_investigations,
     get_investigation_by_number,
     update_investigation,
@@ -48,25 +47,6 @@ def create_new_investigation(
 
     prefix = f"INV-{today}-"
 
-    latest = get_latest_investigation_number(
-        db=db,
-        prefix=prefix
-    )
-
-    if latest is None:
-        next_number = 1
-
-    else:
-        last_number = int(
-            latest.investigation_number.split("-")[-1]
-        )
-
-        next_number = last_number + 1
-
-    investigation_number = (
-        f"{prefix}{next_number:06d}"
-    )
-
     customer = get_customer_by_number(
         db=db,
         customer_number=customer_number
@@ -77,10 +57,10 @@ def create_new_investigation(
 
     investigation_id = str(uuid4())
 
-    investigation = create_investigation(
+    investigation = create_investigation_with_next_number(
         db=db,
         investigation_id=investigation_id,
-        investigation_number=investigation_number,
+        prefix=prefix,
         customer_id=customer.id,
         company_name=company_name
     )
