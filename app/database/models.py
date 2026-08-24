@@ -70,6 +70,130 @@ class Customer(Base):
         back_populates="customer"
     )
 
+    kyc_profile = relationship(
+        "KYCProfile",
+        back_populates="customer",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+# ============================================================
+# KYC PROFILE
+# ============================================================
+
+class KYCProfile(Base):
+
+    __tablename__ = "kyc_profiles"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    customer_id = Column(
+        String,
+        ForeignKey("customers.id"),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    # Identity / KYC
+    identity_type = Column(
+        String,
+        nullable=True
+    )
+
+    identity_number = Column(
+        String,
+        nullable=True
+    )
+
+    aadhaar_number = Column(
+        String,
+        nullable=True
+    )
+
+    pan_number = Column(
+        String,
+        nullable=True
+    )
+
+    # Onboarding
+    onboarding_channel = Column(
+        String,
+        nullable=True
+    )
+
+    customer_country = Column(
+        String,
+        nullable=True
+    )
+
+    # Risk / compliance indicators
+    pep_status = Column(
+        String,
+        nullable=True
+    )
+
+    negative_news = Column(
+        String,
+        nullable=True
+    )
+
+    name_screening_result = Column(
+        String,
+        nullable=True
+    )
+
+    # Business / financial information
+    occupation = Column(
+        String,
+        nullable=True
+    )
+
+    source_of_funds_type = Column(
+        String,
+        nullable=True
+    )
+
+    funds_documentation = Column(
+        String,
+        nullable=True
+    )
+
+    monthly_turnover = Column(
+        String,
+        nullable=True
+    )
+
+    actual_monthly_turnover = Column(
+        String,
+        nullable=True
+    )
+
+    product_category = Column(
+        String,
+        nullable=True
+    )
+
+    # Timestamps
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    customer = relationship(
+        "Customer",
+        back_populates="kyc_profile"
+    )
 
 # ============================================================
 # INVESTIGATION
