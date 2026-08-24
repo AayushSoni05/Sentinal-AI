@@ -273,3 +273,63 @@ class User(Base):
         "Role",
         back_populates="users"
     )
+
+# ============================================================
+# AUDIT LOG
+# ============================================================
+
+class AuditLog(Base):
+
+    __tablename__ = "audit_logs"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    user_id = Column(
+        String,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True
+    )
+
+    action = Column(
+        String,
+        nullable=False
+    )
+
+    entity_type = Column(
+        String,
+        nullable=False
+    )
+
+    entity_id = Column(
+        String,
+        nullable=True
+    )
+
+    old_value = Column(
+        String,
+        nullable=True
+    )
+
+    new_value = Column(
+        String,
+        nullable=True
+    )
+
+    reason = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    user = relationship(
+        "User"
+    )

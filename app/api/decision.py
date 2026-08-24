@@ -127,7 +127,8 @@ def analyst_review(
         db=db,
         investigation_number=investigation_number,
         analyst_decision=analyst_decision,
-        reason=reason
+        reason=reason,
+        user_id=current_user.id
     )
 
     if decision is None:
@@ -170,7 +171,8 @@ def final_decision(
         db=db,
         investigation_number=investigation_number,
         approver_decision=approver_decision,
-        reason=reason
+        reason=reason,
+        user_id=current_user.id
     )
 
     if decision is None:

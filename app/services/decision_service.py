@@ -10,6 +10,10 @@ from app.database.repository import (
     finalize_approved_decision
 )
 
+from app.services.audit_service import (
+    create_audit_log
+)
+
 from app.utils.logger import logger
 
 
@@ -143,7 +147,8 @@ def submit_analyst_decision(
     db: Session,
     investigation_number: str,
     analyst_decision: str,
-    reason: str | None = None
+    reason: str | None = None,
+    user_id: str | None = None
 ):
     investigation = get_investigation_by_number(
         db=db,
@@ -167,6 +172,21 @@ def submit_analyst_decision(
     if analyst_decision not in ALLOWED_ANALYST_DECISIONS:
         return None, "Invalid analyst decision"
 
+# --------------------------------------------------------
+# AUDIT ANALYST ACTION
+# --------------------------------------------------------
+
+    create_audit_log(
+        db=db,
+        user_id=user_id,
+        action="ANALYST_REVIEW",
+        entity_type="Investigation",
+        entity_id=investigation.investigation_number,
+        old_value="Analyst review pending",
+        new_value=analyst_decision,
+        reason=reason
+    )
+
     decision = update_investigation_decision(
         db=db,
         investigation_id=investigation.id,
@@ -182,7 +202,6 @@ def submit_analyst_decision(
 
     return decision, None
 
-
 # ============================================================
 # FINAL CHECKER DECISION
 # ============================================================
@@ -191,7 +210,8 @@ def approve_decision(
     db: Session,
     investigation_number: str,
     approver_decision: str,
-    reason: str | None = None
+    reason: str | None = None,
+    user_id: str | None = None
 ):
     investigation = get_investigation_by_number(
         db=db,
@@ -223,10 +243,24 @@ def approve_decision(
     if not reason or not reason.strip():
         return None, "Checker reason is required"
 
+    old_status = decision.approval_status
+
     # --------------------------------------------------------
     # RETURNED
     # --------------------------------------------------------
+
     if approver_decision == "Returned":
+
+        create_audit_log(
+            db=db,
+            user_id=user_id,
+            action="RETURN_DECISION",
+            entity_type="Investigation",
+            entity_id=investigation.investigation_number,
+            old_value=old_status,
+            new_value="Returned",
+            reason=reason
+        )
 
         decision = update_investigation_decision(
             db=db,
@@ -246,7 +280,19 @@ def approve_decision(
     # --------------------------------------------------------
     # REJECTED
     # --------------------------------------------------------
+
     if approver_decision == "Rejected":
+
+        create_audit_log(
+            db=db,
+            user_id=user_id,
+            action="REJECT_DECISION",
+            entity_type="Investigation",
+            entity_id=investigation.investigation_number,
+            old_value=old_status,
+            new_value="Rejected",
+            reason=reason
+        )
 
         decision = update_investigation_decision(
             db=db,
@@ -268,49 +314,74 @@ def approve_decision(
     # --------------------------------------------------------
     # APPROVED
     # --------------------------------------------------------
+
     if approver_decision == "Approved":
 
         new_customer_status = RECOMMENDATION_STATUS_MAP.get(
             decision.recommendation
         )
 
-    if new_customer_status is None:
-        return (
-            None,
-            "No customer action defined for recommendation"
-        )
+        if new_customer_status is None:
+            return (
+                None,
+                "No customer action defined for recommendation"
+            )
 
-    customer = investigation.customer
+        customer = investigation.customer
 
-    if customer is None:
-        return (
-            None,
-            "Customer linked to investigation not found"
-        )
+        if customer is None:
+            return (
+                None,
+                "Customer linked to investigation not found"
+            )
 
-    updated_customer, finalized_decision = (
-        finalize_approved_decision(
+        create_audit_log(
             db=db,
-            investigation_id=investigation.id,
-            customer_number=customer.customer_number,
-            customer_status=new_customer_status,
+            user_id=user_id,
+            action="APPROVE_DECISION",
+            entity_type="Investigation",
+            entity_id=investigation.investigation_number,
+            old_value=(
+                f"Decision={old_status}; "
+                f"Customer={customer.status}"
+            ),
+            new_value=(
+                f"Decision=Approved; "
+                f"Customer={new_customer_status}"
+            ),
             reason=reason
         )
-    )
 
-    if updated_customer is None or finalized_decision is None:
-        return (
-            None,
-            "Unable to finalize approved decision"
+        updated_customer, finalized_decision = (
+            finalize_approved_decision(
+                db=db,
+                investigation_id=investigation.id,
+                customer_number=customer.customer_number,
+                customer_status=new_customer_status,
+                reason=reason,
+                user_id=user_id
+            )
         )
 
-    logger.info(
-        f"Final decision approved: "
-        f"{investigation.investigation_number} | "
-        f"Recommendation: {finalized_decision.recommendation} | "
-        f"Customer: {updated_customer.customer_number} | "
-        f"New Status: {updated_customer.status} | "
-        f"Reason: {reason}"
-    )
+        if (
+            updated_customer is None
+            or finalized_decision is None
+        ):
+            return (
+                None,
+                "Unable to finalize approved decision"
+            )
 
-    return finalized_decision, None
+        logger.info(
+            f"Final decision approved: "
+            f"{investigation.investigation_number} | "
+            f"Recommendation: "
+            f"{finalized_decision.recommendation} | "
+            f"Customer: "
+            f"{updated_customer.customer_number} | "
+            f"New Status: "
+            f"{updated_customer.status} | "
+            f"Reason: {reason}"
+        )
+
+        return finalized_decision, None

@@ -47,16 +47,23 @@ def create_investigation(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_maker)
 ):
-    investigation = create_new_investigation(
+    investigation, error = create_new_investigation(
         db=db,
         customer_number=request.customer_number,
-        company_name=request.company_name
+        company_name=request.company_name,
+        user_id=current_user.id
     )
 
     if investigation is None:
+        if error == "Customer not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
         raise HTTPException(
-            status_code=404,
-            detail="Customer not found"
+            status_code=403,
+            detail=error
         )
 
     return {
@@ -210,7 +217,8 @@ def submit_investigation(
     investigation, error = change_investigation_status(
         db=db,
         investigation_number=investigation_number,
-        new_status="Submitted"
+        new_status="Submitted",
+        user_id=current_user.id
     )
 
     if investigation is None:
@@ -247,7 +255,8 @@ def review_investigation(
     investigation, error = change_investigation_status(
         db=db,
         investigation_number=investigation_number,
-        new_status="Under Review"
+        new_status="Under Review",
+        user_id=current_user.id
     )
 
     if investigation is None:
@@ -284,7 +293,8 @@ def start_investigation(
     investigation, error = change_investigation_status(
         db=db,
         investigation_number=investigation_number,
-        new_status="Investigation"
+        new_status="Investigation",
+        user_id=current_user.id
     )
 
     if investigation is None:
@@ -321,7 +331,8 @@ def move_to_decision(
     investigation, error = change_investigation_status(
         db=db,
         investigation_number=investigation_number,
-        new_status="Decision"
+        new_status="Decision",
+        user_id=current_user.id
     )
 
     if investigation is None:
@@ -358,7 +369,8 @@ def cancel_investigation(
     investigation, error = change_investigation_status(
         db=db,
         investigation_number=investigation_number,
-        new_status="Cancelled"
+        new_status="Cancelled",
+        user_id=current_user.id
     )
 
     if investigation is None:

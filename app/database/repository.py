@@ -106,7 +106,12 @@ def create_investigation_with_next_number(
         )
 
         db.add(investigation)
-        db.commit()
+
+        # IMPORTANT:
+        # Do not commit here.
+        # The service will add the audit record and then
+        # commit the whole operation together.
+        db.flush()
         db.refresh(investigation)
 
         return investigation
@@ -114,7 +119,6 @@ def create_investigation_with_next_number(
     except Exception:
         db.rollback()
         raise
-
 
 def get_all_investigations(
     db: Session
@@ -431,6 +435,46 @@ def update_customer_status(
 
     return customer
 
+# ============================================================
+# CUSTOMER STATUS CHANGE WITH AUDIT
+# ============================================================
+
+def update_customer_status_with_audit(
+    db: Session,
+    customer_number: str,
+    status: str,
+    user_id: str | None = None,
+    reason: str | None = None
+):
+    from app.services.audit_service import create_audit_log
+
+    customer = get_customer_by_number(
+        db=db,
+        customer_number=customer_number
+    )
+
+    if customer is None:
+        return None
+
+    old_status = customer.status
+
+    customer.status = status
+
+    create_audit_log(
+        db=db,
+        user_id=user_id,
+        action="CUSTOMER_STATUS_CHANGE",
+        entity_type="Customer",
+        entity_id=customer.customer_number,
+        old_value=old_status,
+        new_value=status,
+        reason=reason
+    )
+
+    db.commit()
+    db.refresh(customer)
+
+    return customer
 
 def delete_customer(
     db: Session,
@@ -642,7 +686,8 @@ def finalize_approved_decision(
     investigation_id: str,
     customer_number: str,
     customer_status: str,
-    reason: str
+    reason: str,
+    user_id: str | None = None
 ):
     decision = get_investigation_decision(
         db=db,
@@ -661,6 +706,9 @@ def finalize_approved_decision(
         return None, None
 
     try:
+        # Capture old customer status
+        old_customer_status = customer.status
+
         # Update customer
         customer.status = customer_status
 
@@ -669,7 +717,24 @@ def finalize_approved_decision(
         decision.approver_decision = "Approved"
         decision.reason = reason
 
-        # One commit for both changes
+        # Create customer status audit record
+        from app.services.audit_service import create_audit_log
+
+        create_audit_log(
+            db=db,
+            user_id=user_id,
+            action="CUSTOMER_STATUS_CHANGE",
+            entity_type="Customer",
+            entity_id=customer.customer_number,
+            old_value=old_customer_status,
+            new_value=customer_status,
+            reason=reason
+        )
+
+        # One commit for:
+        # 1. Customer status
+        # 2. Decision approval
+        # 3. Audit log
         db.commit()
 
         db.refresh(customer)

@@ -15,6 +15,8 @@ from app.database.repository import (
 
 from app.utils.logger import logger
 
+from app.services.audit_service import create_audit_log
+
 
 # ============================================================
 # INVESTIGATION LIFECYCLE
@@ -41,7 +43,8 @@ ALLOWED_STATUS_TRANSITIONS = {
 def create_new_investigation(
     db: Session,
     customer_number: str,
-    company_name: str
+    company_name: str,
+    user_id: str | None = None
 ):
     today = datetime.now().strftime("%Y%m%d")
 
@@ -53,7 +56,13 @@ def create_new_investigation(
     )
 
     if customer is None:
-        return None
+        return None, "Customer not found"
+
+    if customer.status == "Blocked":
+        return None, "Blocked customers cannot create investigations"
+
+    if customer.status == "Inactive":
+        return None, "Inactive customers cannot create investigations"
 
     investigation_id = str(uuid4())
 
@@ -72,7 +81,21 @@ def create_new_investigation(
         f"Company: {investigation.company_name}"
     )
 
-    return investigation
+    create_audit_log(
+        db=db,
+        user_id=user_id,
+        action="CREATE_INVESTIGATION",
+        entity_type="Investigation",
+        entity_id=investigation.investigation_number,
+        old_value=None,
+        new_value="Draft",
+        reason=None
+    )
+
+    db.commit()
+    db.refresh(investigation)
+
+    return investigation, None
 
 
 # ============================================================
@@ -168,7 +191,8 @@ def search_investigations_service(
 def change_investigation_status(
     db: Session,
     investigation_number: str,
-    new_status: str
+    new_status: str,
+    user_id: str | None = None
 ):
     investigation = get_investigation_by_number(
         db=db,
@@ -203,6 +227,17 @@ def change_investigation_status(
             f"Invalid status transition: "
             f"{current_status} -> {new_status}"
         )
+
+    create_audit_log(
+        db=db,
+        user_id=user_id,
+        action="INVESTIGATION_STATUS_CHANGE",
+        entity_type="Investigation",
+        entity_id=investigation.investigation_number,
+        old_value=current_status,
+        new_value=new_status,
+        reason=None
+    )
 
     investigation.status = new_status
 
