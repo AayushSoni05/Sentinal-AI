@@ -11,10 +11,6 @@ class KYCRequest(BaseModel):
     onboarding_channel: str | None = None
     customer_country: str | None = None
 
-    pep_status: str | None = None
-    negative_news: str | None = None
-    name_screening_result: str | None = None
-
     occupation: str | None = None
     source_of_funds_type: str | None = None
     funds_documentation: str | None = None
@@ -34,10 +30,6 @@ class KYCUpdate(BaseModel):
 
     onboarding_channel: str | None = None
     customer_country: str | None = None
-
-    pep_status: str | None = None
-    negative_news: str | None = None
-    name_screening_result: str | None = None
 
     occupation: str | None = None
     source_of_funds_type: str | None = None

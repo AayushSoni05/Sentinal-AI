@@ -18,6 +18,8 @@ from app.config.settings import settings
 
 from app.utils.logger import logger
 
+from app.api.kyc import router as kyc_router
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -36,6 +38,7 @@ app.include_router(investigation_router)
 app.include_router(decision_router)
 app.include_router(user_router)
 app.include_router(auth_router)
+app.include_router(kyc_router)
 
 
 @app.exception_handler(Exception)

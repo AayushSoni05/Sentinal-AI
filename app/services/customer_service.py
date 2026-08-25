@@ -14,6 +14,14 @@ from app.database.repository import (
 
 from app.utils.logger import logger
 
+from app.services.onboarding_service import (
+    ALLOWED_CUSTOMER_TYPES
+)
+
+from app.database.models import (
+    Person,
+    LegalEntity
+)
 
 # ============================================================
 # CREATE CUSTOMER
@@ -27,11 +35,42 @@ def create_new_customer(
     pan: str | None = None,
     gst_cin: str | None = None
 ):
+
+    if customer_type not in ALLOWED_CUSTOMER_TYPES:
+        return None, "Invalid customer type"
+    
     today = datetime.now().strftime("%Y%m%d")
 
     prefix = f"CUS-{today}-"
 
     customer_id = str(uuid4())
+    person_id = None
+    legal_entity_id = None
+
+    if customer_type == "Individual":
+        person_id = str(uuid4())
+
+    elif customer_type == "Company":
+        legal_entity_id = str(uuid4())
+
+    if customer_type == "Individual":
+        person = Person(
+            id=person_id,
+            full_name=name,
+            country_of_residence=country
+        )
+
+        db.add(person)
+
+    elif customer_type == "Company":
+        legal_entity = LegalEntity(
+            id=legal_entity_id,
+            legal_name=name,
+            entity_type=customer_type,
+            country_of_incorporation=country
+        )
+
+        db.add(legal_entity)
 
     customer = create_customer_with_next_number(
         db=db,
@@ -41,8 +80,13 @@ def create_new_customer(
         customer_type=customer_type,
         country=country,
         pan=pan,
-        gst_cin=gst_cin
+        gst_cin=gst_cin,
+        person_id=person_id,
+        legal_entity_id=legal_entity_id
     )
+
+    db.commit()
+    db.refresh(customer)
 
     logger.info(
         f"Customer created: "
@@ -50,7 +94,7 @@ def create_new_customer(
         f"Name: {customer.name}"
     )
 
-    return customer
+    return customer,None
 
 
 # ============================================================

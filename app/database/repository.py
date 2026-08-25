@@ -293,7 +293,9 @@ def create_customer_with_next_number(
     customer_type: str,
     country: str,
     pan: str | None = None,
-    gst_cin: str | None = None
+    gst_cin: str | None = None,
+    person_id: str | None = None,
+    legal_entity_id: str | None = None
 ):
     from sqlalchemy import text
 
@@ -332,6 +334,8 @@ def create_customer_with_next_number(
 
         customer = Customer(
             id=customer_id,
+            person_id=person_id,
+            legal_entity_id=legal_entity_id,
             customer_number=customer_number,
             name=name,
             customer_type=customer_type,
@@ -342,9 +346,7 @@ def create_customer_with_next_number(
         )
 
         db.add(customer)
-        db.commit()
-        db.refresh(customer)
-
+        db.flush()
         return customer
 
     except Exception:

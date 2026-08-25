@@ -48,13 +48,19 @@ def create_customer(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_maker)
 ):
-    customer = create_new_customer(
+    customer, error = create_new_customer(
         db=db,
         name=request.name,
         customer_type=request.customer_type,
         country=request.country,
         pan=request.pan,
         gst_cin=request.gst_cin
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=400,
+            detail=error
     )
 
     return {

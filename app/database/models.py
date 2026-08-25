@@ -20,6 +20,22 @@ class Customer(Base):
         index=True
     )
 
+    person_id = Column(
+        String,
+        ForeignKey("persons.id"),
+        nullable=True,
+        unique=True,
+        index=True
+    )
+
+    legal_entity_id = Column(
+        String,
+        ForeignKey("legal_entities.id"),
+        nullable=True,
+        unique=True,
+        index=True
+    )
+
     customer_number = Column(
         String,
         unique=True,
@@ -70,11 +86,374 @@ class Customer(Base):
         back_populates="customer"
     )
 
+    person = relationship(
+        "Person",
+        back_populates="customer",
+        uselist=False
+    )
+
+    legal_entity = relationship(
+        "LegalEntity",
+        back_populates="customer",
+        uselist=False
+    )
+
     kyc_profile = relationship(
         "KYCProfile",
         back_populates="customer",
         uselist=False,
         cascade="all, delete-orphan"
+    )
+
+# ============================================================
+# PERSON
+# ============================================================
+
+class Person(Base):
+
+    __tablename__ = "persons"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    full_name = Column(
+        String,
+        nullable=False
+    )
+
+    date_of_birth = Column(
+        DateTime,
+        nullable=True
+    )
+
+    nationality = Column(
+        String,
+        nullable=True
+    )
+
+    country_of_residence = Column(
+        String,
+        nullable=True
+    )
+
+    identity_type = Column(
+        String,
+        nullable=True
+    )
+
+    identity_number = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    customer = relationship(
+        "Customer",
+        back_populates="person",
+        uselist=False
+    )
+
+    entity_relationships = relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.from_person_id"
+    )
+
+# ============================================================
+# LEGAL ENTITY
+# ============================================================
+
+class LegalEntity(Base):
+
+    __tablename__ = "legal_entities"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    legal_name = Column(
+        String,
+        nullable=False
+    )
+
+    trading_name = Column(
+        String,
+        nullable=True
+    )
+
+    entity_type = Column(
+        String,
+        nullable=False
+    )
+
+    registration_number = Column(
+        String,
+        nullable=True
+    )
+
+    incorporation_date = Column(
+        DateTime,
+        nullable=True
+    )
+
+    country_of_incorporation = Column(
+        String,
+        nullable=True
+    )
+
+    registered_address = Column(
+        String,
+        nullable=True
+    )
+
+    principal_business_address = Column(
+        String,
+        nullable=True
+    )
+
+    business_activity = Column(
+        String,
+        nullable=True
+    )
+
+    industry = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    customer = relationship(
+        "Customer",
+        back_populates="legal_entity",
+        uselist=False
+    )
+
+    entity_relationships_from = relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.from_legal_entity_id"
+    )
+
+    entity_relationships_to = relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.to_legal_entity_id"
+    )
+
+# ============================================================
+# ENTITY RELATIONSHIP
+# ============================================================
+
+class EntityRelationship(Base):
+
+    __tablename__ = "entity_relationships"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    relationship_type = Column(
+        String,
+        nullable=False
+    )
+
+    from_person_id = Column(
+        String,
+        ForeignKey("persons.id"),
+        nullable=True,
+        index=True
+    )
+
+    from_legal_entity_id = Column(
+        String,
+        ForeignKey("legal_entities.id"),
+        nullable=True,
+        index=True
+    )
+
+    to_legal_entity_id = Column(
+        String,
+        ForeignKey("legal_entities.id"),
+        nullable=False,
+        index=True
+    )
+
+    from_person = relationship(
+        "Person",
+        foreign_keys=[from_person_id]
+    )
+
+    from_legal_entity = relationship(
+        "LegalEntity",
+        foreign_keys=[from_legal_entity_id]
+    )
+
+    to_legal_entity = relationship(
+        "LegalEntity",
+        foreign_keys=[to_legal_entity_id]
+    )
+
+    
+    ownership_percentage = Column(
+        String,
+        nullable=True
+    )
+
+    voting_percentage = Column(
+        String,
+        nullable=True
+    )
+
+    is_control = Column(
+        String,
+        nullable=True
+    )
+
+    effective_from = Column(
+        DateTime,
+        nullable=True
+    )
+
+    effective_to = Column(
+        DateTime,
+        nullable=True
+    )
+
+    evidence_reference = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+# ============================================================
+# EVIDENCE / DOCUMENT
+# ============================================================
+
+class Evidence(Base):
+
+    __tablename__ = "evidence"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    subject_type = Column(
+        String,
+        nullable=False
+    )
+
+    subject_id = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    document_type = Column(
+        String,
+        nullable=False
+    )
+
+    document_number = Column(
+        String,
+        nullable=True
+    )
+
+    issuing_authority = Column(
+        String,
+        nullable=True
+    )
+
+    issuing_country = Column(
+        String,
+        nullable=True
+    )
+
+    issue_date = Column(
+        DateTime,
+        nullable=True
+    )
+
+    expiry_date = Column(
+        DateTime,
+        nullable=True
+    )
+
+    verification_status = Column(
+        String,
+        nullable=False,
+        default="Not Provided"
+    )
+
+    verification_method = Column(
+        String,
+        nullable=True
+    )
+
+    verified_by = Column(
+        String,
+        nullable=True
+    )
+
+    verified_at = Column(
+        DateTime,
+        nullable=True
+    )
+
+    storage_reference = Column(
+        String,
+        nullable=True
+    )
+
+    metadata_text = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
     )
 
 # ============================================================
@@ -131,22 +510,6 @@ class KYCProfile(Base):
         nullable=True
     )
 
-    # Risk / compliance indicators
-    pep_status = Column(
-        String,
-        nullable=True
-    )
-
-    negative_news = Column(
-        String,
-        nullable=True
-    )
-
-    name_screening_result = Column(
-        String,
-        nullable=True
-    )
-
     # Business / financial information
     occupation = Column(
         String,
@@ -193,6 +556,73 @@ class KYCProfile(Base):
     customer = relationship(
         "Customer",
         back_populates="kyc_profile"
+    )
+
+    screening_results = relationship(
+        "ScreeningResult",
+        back_populates="kyc_profile",
+        cascade="all, delete-orphan"
+    )
+
+# ============================================================
+# SCREENING RESULT
+# ============================================================
+
+class ScreeningResult(Base):
+
+    __tablename__ = "screening_results"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    kyc_profile_id = Column(
+        String,
+        ForeignKey("kyc_profiles.id"),
+        nullable=False,
+        index=True
+    )
+
+    screening_type = Column(
+        String,
+        nullable=False
+    )
+
+    provider = Column(
+        String,
+        nullable=False
+    )
+
+    result = Column(
+        String,
+        nullable=False
+    )
+
+    matched_name = Column(
+        String,
+        nullable=True
+    )
+
+    match_confidence = Column(
+        String,
+        nullable=True
+    )
+
+    evidence = Column(
+        String,
+        nullable=True
+    )
+
+    checked_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    kyc_profile = relationship(
+        "KYCProfile",
+        back_populates="screening_results"
     )
 
 # ============================================================
