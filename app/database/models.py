@@ -168,7 +168,8 @@ class Person(Base):
 
     entity_relationships = relationship(
         "EntityRelationship",
-        foreign_keys="EntityRelationship.from_person_id"
+        foreign_keys="EntityRelationship.from_person_id",
+        back_populates="from_person"
     )
 
 # ============================================================
@@ -254,12 +255,14 @@ class LegalEntity(Base):
 
     entity_relationships_from = relationship(
         "EntityRelationship",
-        foreign_keys="EntityRelationship.from_legal_entity_id"
+        foreign_keys="EntityRelationship.from_legal_entity_id",
+        back_populates="from_legal_entity"
     )
 
     entity_relationships_to = relationship(
         "EntityRelationship",
-        foreign_keys="EntityRelationship.to_legal_entity_id"
+        foreign_keys="EntityRelationship.to_legal_entity_id",
+        back_populates="to_legal_entity"
     )
 
 # ============================================================
@@ -304,17 +307,20 @@ class EntityRelationship(Base):
 
     from_person = relationship(
         "Person",
-        foreign_keys=[from_person_id]
+        foreign_keys=[from_person_id],
+        back_populates="entity_relationships"
     )
 
     from_legal_entity = relationship(
         "LegalEntity",
-        foreign_keys=[from_legal_entity_id]
+        foreign_keys=[from_legal_entity_id],
+        back_populates="entity_relationships_from"
     )
 
     to_legal_entity = relationship(
         "LegalEntity",
-        foreign_keys=[to_legal_entity_id]
+        foreign_keys=[to_legal_entity_id],
+        back_populates="entity_relationships_to"
     )
 
     
@@ -583,6 +589,22 @@ class ScreeningResult(Base):
         ForeignKey("kyc_profiles.id"),
         nullable=False,
         index=True
+    )
+
+    subject_type = Column(
+        String,
+        nullable=False
+    )
+
+    subject_id = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    relationship_role = Column(
+        String,
+        nullable=False
     )
 
     screening_type = Column(

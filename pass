@@ -1,0 +1,4 @@
+Role	Username	Password	Role
+Maker	aayush_maker	Maker@12345	Maker
+Checker	sentinel_checker	Checker@12345	Checker
+Admin	sentinel_admin	Admin@12345	Admin

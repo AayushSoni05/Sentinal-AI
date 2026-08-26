@@ -16,6 +16,20 @@ from app.services.audit_service import (
 
 from app.utils.logger import logger
 
+from app.database.models import KYCProfile
+
+from app.services.company_cdd_service import (
+    get_company_screening_subjects
+)
+
+from app.services.screening_service import (
+    build_screening_plan,
+    get_screening_summary
+)
+
+from app.services.customer_service import (
+    validate_customer_entity_link
+)
 
 # ============================================================
 # ALLOWED DECISION VALUES
@@ -54,6 +68,115 @@ RECOMMENDATION_STATUS_MAP = {
     "Block Recommended": "Blocked"
 }
 
+# ============================================================
+# SCREENING SUMMARY → RECOMMENDATION
+# ============================================================
+
+def recommendation_from_screening_summary(
+    screening_summary
+):
+    overall_status = screening_summary.get(
+        "overall_status"
+    )
+
+    if overall_status == "CLEAR":
+        return "Clear"
+
+    if overall_status == "CONFIRMED_MATCH":
+        return "Block Recommended"
+
+    if overall_status == "MATCH":
+        return "Review Required"
+
+    if overall_status == "REVIEW":
+        return "Review Required"
+
+    if overall_status == "ERROR":
+        return "Review Required"
+
+    return "Review Required"
+
+# ============================================================
+# BUILD RECOMMENDATION FROM SCREENING
+# ============================================================
+
+def build_screening_recommendation(
+    db: Session,
+    investigation_number: str
+):
+    investigation = get_investigation_by_number(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if investigation is None:
+        return None, "Investigation not found"
+
+    if investigation.customer is None:
+        return None, "Customer linked to investigation not found"
+
+    valid, error = validate_customer_entity_link(
+        investigation.customer
+    )
+
+    if not valid:
+        return None, error
+
+    kyc_profile = (
+        db.query(KYCProfile)
+        .filter(
+            KYCProfile.customer_id
+            == investigation.customer.id
+        )
+        .first()
+    )
+
+    if kyc_profile is None:
+        return None, "KYC profile not found"
+
+    legal_entity_id = (
+        investigation.customer.legal_entity_id
+    )
+
+    if legal_entity_id is None:
+        return None, "Customer is not linked to a legal entity"
+
+    subjects = get_company_screening_subjects(
+        db=db,
+        legal_entity_id=legal_entity_id
+    )
+
+    screening_plan = build_screening_plan(
+        subjects
+    )
+
+    screening_summary, error = get_screening_summary(
+        db=db,
+        kyc_profile_id=kyc_profile.id,
+        screening_plan=screening_plan
+    )
+
+    if error:
+        return None, error
+
+    recommendation = (
+        recommendation_from_screening_summary(
+            screening_summary
+        )
+    )
+
+    return {
+        "investigation_number":
+            investigation.investigation_number,
+        "kyc_profile_id":
+            kyc_profile.id,
+        "screening_plan":
+            screening_plan,
+        "screening_summary":
+            screening_summary,
+        "recommendation":
+            recommendation
+    }, None
 
 # ============================================================
 # CREATE RECOMMENDATION

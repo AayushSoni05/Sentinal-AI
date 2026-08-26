@@ -6,7 +6,9 @@ from app.database.models import (
     Investigation,
     InvestigationDecision,
     Role,
-    User
+    User,
+    EntityRelationship,
+    ScreeningResult
 )
 
 
@@ -747,3 +749,99 @@ def finalize_approved_decision(
     except Exception:
         db.rollback()
         raise
+
+# ============================================================
+# CREATE ENTITY RELATIONSHIP
+# ============================================================
+
+def create_entity_relationship(
+    db: Session,
+    relationship_id: str,
+    relationship_type: str,
+    from_person_id: str | None = None,
+    from_legal_entity_id: str | None = None,
+    to_legal_entity_id: str | None = None,
+    ownership_percentage: float | None = None,
+    voting_percentage: float | None = None,
+    is_control: bool = False,
+    effective_from=None,
+    effective_to=None,
+    evidence_reference: str | None = None
+):
+    relationship = EntityRelationship(
+        id=relationship_id,
+        relationship_type=relationship_type,
+        from_person_id=from_person_id,
+        from_legal_entity_id=from_legal_entity_id,
+        to_legal_entity_id=to_legal_entity_id,
+        ownership_percentage=ownership_percentage,
+        voting_percentage=voting_percentage,
+        is_control=is_control,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        evidence_reference=evidence_reference
+    )
+
+    db.add(relationship)
+    db.flush()
+
+    return relationship
+
+# ============================================================
+# CREATE SCREENING RESULT
+# ============================================================
+
+def create_screening_result(
+    db: Session,
+    result_id: str,
+    kyc_profile_id: str,
+    subject_type: str,
+    subject_id: str,
+    relationship_role: str,
+    screening_type: str,
+    provider: str,
+    result: str,
+    matched_name: str | None = None,
+    match_confidence: str | None = None,
+    evidence: str | None = None,
+    checked_at=None
+):
+    screening_result = ScreeningResult(
+        id=result_id,
+        kyc_profile_id=kyc_profile_id,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        relationship_role=relationship_role,
+        screening_type=screening_type,
+        provider=provider,
+        result=result,
+        matched_name=matched_name,
+        match_confidence=match_confidence,
+        evidence=evidence,
+        checked_at=checked_at
+    )
+
+    db.add(screening_result)
+    db.flush()
+
+    return screening_result
+
+# ============================================================
+# GET SCREENING RESULTS
+# ============================================================
+
+def get_screening_results(
+    db: Session,
+    kyc_profile_id: str
+):
+    return (
+        db.query(ScreeningResult)
+        .filter(
+            ScreeningResult.kyc_profile_id
+            == kyc_profile_id
+        )
+        .order_by(
+            ScreeningResult.checked_at.desc()
+        )
+        .all()
+    )

@@ -96,6 +96,22 @@ def create_new_customer(
 
     return customer,None
 
+# ============================================================
+# VALIDATE CUSTOMER ENTITY LINK
+# ============================================================
+
+def validate_customer_entity_link(
+    customer
+):
+    if customer.customer_type == "Individual":
+        if not customer.person_id:
+            return False, "Individual customer is missing person link"
+
+    elif customer.customer_type == "Company":
+        if not customer.legal_entity_id:
+            return False, "Company customer is missing legal entity link"
+
+    return True, None
 
 # ============================================================
 # GET CUSTOMER

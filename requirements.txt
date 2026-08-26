@@ -7,3 +7,6 @@ pydantic-settings
 python-dotenv
 python-jose[cryptography]
 python-multipart
+alembic
+pwdlib[argon2]
+email-validator
