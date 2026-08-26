@@ -298,13 +298,14 @@ def build_screening_summary(
     completeness=None
 ):
     summary = {
-        "total_results": len(screening_results),
-        "clear": 0,
-        "matches": 0,
-        "possible_matches": 0,
-        "errors": 0,
-        "overall_status": "REVIEW"
-    }
+    "total_results": len(screening_results),
+    "clear": 0,
+    "matches": 0,
+    "possible_matches": 0,
+    "confirmed_matches": 0,
+    "errors": 0,
+    "overall_status": "REVIEW"
+}
 
     for result in screening_results:
 
@@ -316,6 +317,9 @@ def build_screening_summary(
 
         elif result.result == "POSSIBLE_MATCH":
             summary["possible_matches"] += 1
+
+        elif result.result == "CONFIRMED_MATCH":
+            summary["confirmed_matches"] += 1
 
         elif result.result == "ERROR":
             summary["errors"] += 1
