@@ -14,6 +14,10 @@ from app.services.screening_providers import (
     MockScreeningProvider
 )
 
+from app.services.providers.registry import (
+    get_screening_provider
+)
+
 # ============================================================
 # GET SCREENING RESULTS
 # ============================================================
@@ -215,7 +219,9 @@ def execute_screening_task(
     screening_task,
     kyc_profile_id: str
 ):
-    provider = MockScreeningProvider()
+    provider = get_screening_provider(
+        screening_task["screening_type"]
+    )
 
     provider_result = provider.screen(
         name=screening_task["name"],

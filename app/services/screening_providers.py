@@ -30,13 +30,13 @@ class MockScreeningProvider(
 ):
 
     def screen(
-    self,
-    name: str,
-    screening_type: str,
-    subject_type: str,
-    subject_id: str,
-    relationship_role: str
-):
+        self,
+        name: str,
+        screening_type: str,
+        subject_type: str,
+        subject_id: str,
+        relationship_role: str
+    ):
         return {
             "provider": "MOCK_PROVIDER",
             "screening_type": screening_type,

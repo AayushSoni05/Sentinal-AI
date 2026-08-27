@@ -10,6 +10,9 @@ class ExternalScreeningProvider(Protocol):
     def screen(
         self,
         name: str,
-        screening_type: str
+        screening_type: str,
+        subject_type: str,
+        subject_id: str,
+        relationship_role: str
     ):
         ...
