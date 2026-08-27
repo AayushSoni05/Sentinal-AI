@@ -6,13 +6,16 @@ from app.services.screening_providers import (
     MockScreeningProvider
 )
 
+from app.services.providers.ofac.provider import (
+    OFACSanctionsProvider
+)
 
 # ============================================================
 # PROVIDER REGISTRY
 # ============================================================
 
 SCREENING_PROVIDER_REGISTRY = {
-    "SANCTIONS": MockScreeningProvider,
+    "SANCTIONS": OFACSanctionsProvider,
     "PEP": MockScreeningProvider,
     "ADVERSE_MEDIA": MockScreeningProvider
 }

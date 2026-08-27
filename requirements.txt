@@ -10,3 +10,4 @@ python-multipart
 alembic
 pwdlib[argon2]
 email-validator
+requests
