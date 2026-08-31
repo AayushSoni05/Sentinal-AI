@@ -35,7 +35,9 @@ class MockScreeningProvider(
         screening_type: str,
         subject_type: str,
         subject_id: str,
-        relationship_role: str
+        relationship_role: str,
+        subject_country: str | None = None,
+        subject_identifiers: dict | None = None
     ):
         return {
             "provider": "MOCK_PROVIDER",

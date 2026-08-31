@@ -228,7 +228,13 @@ def execute_screening_task(
         screening_type=screening_task["screening_type"],
         subject_type=screening_task["subject_type"],
         subject_id=screening_task["subject_id"],
-        relationship_role=screening_task["relationship_role"]
+        relationship_role=screening_task["relationship_role"],
+        subject_country=screening_task.get(
+            "subject_country"
+        ),
+        subject_identifiers=screening_task.get(
+            "subject_identifiers"
+        )
     )
 
     screening_result, error = save_screening_result(
