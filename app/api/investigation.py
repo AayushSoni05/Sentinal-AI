@@ -21,7 +21,8 @@ from app.services.investigation_service import (
     update_investigation_service,
     delete_investigation_service,
     change_investigation_status,
-    search_investigations_service
+    search_investigations_service,
+    get_investigation_match_review
 )
 
 
@@ -141,6 +142,40 @@ def get_investigation(
         "created_at": investigation.created_at
     }
 
+# ============================================================
+# GET INVESTIGATION SCREENING RESULTS
+# ============================================================
+
+@router.get(
+    "/investigations/{investigation_number}/screening-results"
+)
+def get_investigation_screening_results_api(
+    investigation_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
+):
+    result, error = get_investigation_screening_results(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if result is None:
+        status_code = (
+            404
+            if error in {
+                "Investigation not found",
+                "Investigation customer not found",
+                "KYC profile not found"
+            }
+            else 400
+        )
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=error
+        )
+
+    return result
 
 # ============================================================
 # UPDATE INVESTIGATION DETAILS
@@ -392,3 +427,38 @@ def cancel_investigation(
         "cancelled_by": current_user.username,
         "message": "Investigation cancelled successfully"
     }
+
+# ============================================================
+# GET INVESTIGATION MATCH REVIEW
+# ============================================================
+
+@router.get(
+    "/investigations/{investigation_number}/match-review"
+)
+def get_investigation_match_review_api(
+    investigation_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
+):
+    result, error = get_investigation_match_review(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if result is None:
+        status_code = (
+            404
+            if error in {
+                "Investigation not found",
+                "Investigation customer not found",
+                "KYC profile not found"
+            }
+            else 400
+        )
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=error
+        )
+
+    return result

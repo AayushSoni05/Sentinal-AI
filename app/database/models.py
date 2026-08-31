@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey,Boolean
 from sqlalchemy.orm import relationship
 
 from app.database.connection import Base
@@ -605,6 +605,32 @@ class ScreeningResult(Base):
     relationship_role = Column(
         String,
         nullable=False
+    )
+
+    source_uid = Column(
+        String,
+        nullable=True,
+        index=True
+    )
+
+    country_match = Column(
+        Boolean,
+        nullable=True
+    )
+
+    identifier_match = Column(
+        Boolean,
+        nullable=True
+    )
+
+    match_strength = Column(
+        String,
+        nullable=True
+    )
+
+    evidence_strength = Column(
+        String,
+        nullable=True
     )
 
     screening_type = Column(

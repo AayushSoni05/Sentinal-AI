@@ -62,6 +62,8 @@ def get_company_relationships(
                     "subject_type": "Person",
                     "subject_id": person.id,
                     "name": person.full_name,
+                    "subject_country": person.country_of_residence,
+                    "subject_identifiers": None,
                     "ownership_percentage":
                         relationship.ownership_percentage,
                     "voting_percentage":
@@ -89,6 +91,8 @@ def get_company_relationships(
                     "subject_type": "LegalEntity",
                     "subject_id": entity.id,
                     "name": entity.legal_name,
+                    "subject_country":entity.country_of_incorporation,
+                    "subject_identifiers": None,
                     "ownership_percentage":
                         relationship.ownership_percentage,
                     "voting_percentage":
@@ -242,7 +246,9 @@ def get_company_screening_subjects(
                 "subject_type": party["subject_type"],
                 "subject_id": party["subject_id"],
                 "name": party["name"],
-                "relationship_role": role_labels[role]
+                "relationship_role": role_labels[role],
+                "subject_country": party["subject_country"],
+                "subject_identifiers": party["subject_identifiers"]
             })
 
     return subjects

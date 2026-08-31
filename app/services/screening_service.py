@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+import json
+
 from app.database.repository import (
     create_screening_result,
      get_screening_results
@@ -90,6 +92,7 @@ SCREENING_POLICY = {
 ALLOWED_SCREENING_RESULTS = {
     "CLEAR",
     "MATCH",
+    "NO_MATCH",
     "POSSIBLE_MATCH",
     "CONFIRMED_MATCH",
     "ERROR"
@@ -133,7 +136,9 @@ def build_screening_plan(
                 "subject_id": subject["subject_id"],
                 "name": subject["name"],
                 "relationship_role": subject["relationship_role"],
-                "screening_type": screening_type
+                "screening_type": screening_type,
+                "subject_country": subject.get("subject_country"),
+                "subject_identifiers": subject.get("subject_identifiers")
             })
 
     return deduplicate_screening_plan(
@@ -237,6 +242,16 @@ def execute_screening_task(
         )
     )
 
+    evidence = provider_result.get(
+        "evidence"
+    )
+
+    if isinstance(evidence, dict):
+        evidence = json.dumps(
+            evidence,
+            ensure_ascii=False
+        )
+
     screening_result, error = save_screening_result(
         db=db,
         kyc_profile_id=kyc_profile_id,
@@ -248,7 +263,27 @@ def execute_screening_task(
         result=provider_result["result"],
         matched_name=provider_result["matched_name"],
         match_confidence=provider_result["match_confidence"],
-        evidence=provider_result["evidence"]
+        evidence=evidence,
+        source_uid=(
+            provider_result["evidence"].get("uid")
+            if isinstance(
+                provider_result.get("evidence"),
+                dict
+            )
+            else None
+        ),
+        country_match=provider_result.get(
+            "country_match"
+        ),
+        identifier_match=provider_result.get(
+            "identifier_match"
+        ),
+        match_strength=provider_result.get(
+            "match_strength"
+        ),
+        evidence_strength=provider_result.get(
+            "evidence_strength"
+        ),
     )
 
     if error:
@@ -348,6 +383,9 @@ def build_screening_summary(
     if summary["errors"] > 0:
         summary["overall_status"] = "ERROR"
 
+    elif summary["confirmed_matches"] > 0:
+        summary["overall_status"] = "CONFIRMED_MATCH"
+
     elif summary["matches"] > 0:
         summary["overall_status"] = "MATCH"
 
@@ -356,6 +394,9 @@ def build_screening_summary(
 
     elif summary["total_results"] > 0:
         summary["overall_status"] = "CLEAR"
+
+    else:
+        summary["overall_status"] = "REVIEW"
 
     return summary
 # ============================================================
@@ -431,7 +472,12 @@ def save_screening_result(
     matched_name: str | None = None,
     match_confidence: str | None = None,
     evidence: str | None = None,
-    checked_at=None
+    checked_at=None,
+    source_uid: str | None = None,
+    country_match: bool | None = None,
+    identifier_match: bool | None = None,
+    match_strength: str | None = None,
+    evidence_strength: str | None = None,
 ):
     valid, error = validate_screening_result(
         result
@@ -454,7 +500,12 @@ def save_screening_result(
         matched_name=matched_name,
         match_confidence=match_confidence,
         evidence=evidence,
-        checked_at=checked_at
+        checked_at=checked_at,
+        source_uid=source_uid,
+        country_match=country_match,
+        identifier_match=identifier_match,
+        match_strength=match_strength,
+        evidence_strength=evidence_strength
     )
 
     return screening_result, None

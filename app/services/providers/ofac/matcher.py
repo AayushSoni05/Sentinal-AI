@@ -137,28 +137,10 @@ def assess_match_strength(
 # DETERMINE MATCH RESULT
 # ============================================================
 
-def determine_match_result(
-    name_score: float,
-    country_match: bool | None,
-    match_strength: str
-):
-    if (
-        name_score >= 0.95
-        and country_match is True
-        and match_strength == "STRONG"
-    ):
-        return "POSSIBLE_MATCH"
-
-    if match_strength == "MODERATE":
-        return "POSSIBLE_MATCH"
-
-    return "NO_MATCH"
-
 def match_subject_against_sdn(
     subject_name: str,
     sdn_records: list[dict],
     possible_match_threshold: float = 0.85,
-    candidate_threshold: float = 0.50,
     subject_country: str | None = None,
     subject_identifiers: dict | None = None
 ):
@@ -171,7 +153,10 @@ def match_subject_against_sdn(
             "result": "NO_MATCH",
             "match_confidence": 0.0,
             "matched_record": None,
-            "country_match": None
+            "country_match": None,
+            "match_strength": "WEAK",
+            "identifier_match": None,
+            "evidence_strength": "WEAK"
         }
 
     best_match = None
@@ -180,7 +165,10 @@ def match_subject_against_sdn(
     for record in sdn_records:
 
         candidate_names = [
-            record.get("normalized_name", "")
+            record.get(
+                "normalized_name",
+                ""
+            )
         ]
 
         candidate_names.extend(
@@ -201,45 +189,18 @@ def match_subject_against_sdn(
                 best_score = score
                 best_match = record
 
-    matched_country = (
-        country_matches(
-            subject_country,
-            best_match
-        )
-        if best_match
-        else None
-    )
+    # --------------------------------------------------------
+    # KEEP A CANDIDATE ONLY IF IT REACHES THE MATCH THRESHOLD
+    # --------------------------------------------------------
 
-    match_strength = assess_match_strength(
-        name_score=best_score,
-        country_match=matched_country
-    )
-
-    identifier_match = (
-        identifier_matches(
-            subject_identifiers,
-            best_match
-        )
-        if best_match
-        else None
-    )
-
-    evidence_strength = assess_corroborating_evidence(
-        name_score=best_score,
-        country_match=matched_country,
-        identifier_match=identifier_match
-    )
-
-    result = determine_sanctions_status(
-        evidence_strength=evidence_strength,
-        name_score=best_score,
-        identifier_match=identifier_match
-    )
-
-    if best_score >= candidate_threshold:
+    if best_score >= possible_match_threshold:
         matched_record = best_match
     else:
         matched_record = None
+
+    # --------------------------------------------------------
+    # COUNTRY EVIDENCE
+    # --------------------------------------------------------
 
     matched_country = (
         country_matches(
@@ -250,9 +211,46 @@ def match_subject_against_sdn(
         else None
     )
 
+    # --------------------------------------------------------
+    # NAME MATCH STRENGTH
+    # --------------------------------------------------------
+
     match_strength = assess_match_strength(
         name_score=best_score,
         country_match=matched_country
+    )
+
+    # --------------------------------------------------------
+    # IDENTIFIER EVIDENCE
+    # --------------------------------------------------------
+
+    identifier_match = (
+        identifier_matches(
+            subject_identifiers,
+            matched_record
+        )
+        if matched_record
+        else None
+    )
+
+    # --------------------------------------------------------
+    # CORROBORATING EVIDENCE
+    # --------------------------------------------------------
+
+    evidence_strength = assess_corroborating_evidence(
+        name_score=best_score,
+        country_match=matched_country,
+        identifier_match=identifier_match
+    )
+
+    # --------------------------------------------------------
+    # FINAL SANCTIONS STATUS
+    # --------------------------------------------------------
+
+    result = determine_sanctions_status(
+        evidence_strength=evidence_strength,
+        name_score=best_score,
+        identifier_match=identifier_match
     )
 
     return {
@@ -265,7 +263,7 @@ def match_subject_against_sdn(
         "country_match": matched_country,
         "match_strength": match_strength,
         "identifier_match": identifier_match,
-        "evidence_strength": evidence_strength,
+        "evidence_strength": evidence_strength
     }
 
 # ============================================================

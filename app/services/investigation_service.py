@@ -10,13 +10,24 @@ from app.database.repository import (
     update_investigation,
     delete_investigation,
     get_customer_by_number,
-    search_investigations
+    search_investigations,
+    get_screening_results,
+    get_latest_screening_results
 )
 
 from app.utils.logger import logger
 
 from app.services.audit_service import create_audit_log
 
+from app.services.company_cdd_service import (
+    check_company_cdd_completeness,
+    get_company_screening_subjects
+)
+
+from app.services.screening_service import (
+    get_screening_summary,
+    build_screening_plan
+)
 
 # ============================================================
 # INVESTIGATION LIFECYCLE
@@ -117,6 +128,285 @@ def get_investigation_service(
         investigation_number=investigation_number
     )
 
+# ============================================================
+# GET INVESTIGATION MATCH REVIEW
+# ============================================================
+
+def get_investigation_match_review(
+    db: Session,
+    investigation_number: str
+):
+    investigation = get_investigation_by_number(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if investigation is None:
+        return None, "Investigation not found"
+
+    customer = investigation.customer
+
+    if customer is None:
+        return None, "Investigation customer not found"
+
+    kyc_profile = customer.kyc_profile
+
+    if kyc_profile is None:
+        return None, "KYC profile not found"
+
+    screening_results = get_latest_screening_results(
+        db=db,
+        kyc_profile_id=kyc_profile.id
+    )
+
+    review_results = [
+        {
+            "id": result.id,
+            "subject_type": result.subject_type,
+            "subject_id": result.subject_id,
+            "relationship_role": result.relationship_role,
+            "screening_type": result.screening_type,
+            "provider": result.provider,
+            "result": result.result,
+            "matched_name": result.matched_name,
+            "match_confidence": result.match_confidence,
+            "source_uid": result.source_uid,
+            "country_match": result.country_match,
+            "identifier_match": result.identifier_match,
+            "match_strength": result.match_strength,
+            "evidence_strength": result.evidence_strength,
+            "evidence": result.evidence,
+            "checked_at": result.checked_at
+        }
+        for result in screening_results
+        if result.result in {
+            "MATCH",
+            "POSSIBLE_MATCH",
+            "CONFIRMED_MATCH"
+        }
+    ]
+
+    return {
+        "investigation_number":
+            investigation.investigation_number,
+        "investigation_id":
+            investigation.id,
+        "status":
+            investigation.status,
+        "match_count":
+            len(review_results),
+        "matches":
+            review_results
+    }, None
+
+# ============================================================
+# GET INVESTIGATION SCREENING RESULTS
+# ============================================================
+
+def get_investigation_screening_results(
+    db: Session,
+    investigation_number: str
+):
+    investigation = get_investigation_by_number(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if investigation is None:
+        return None, "Investigation not found"
+
+    customer = investigation.customer
+
+    if customer is None:
+        return None, "Investigation customer not found"
+
+    kyc_profile = customer.kyc_profile
+
+    if kyc_profile is None:
+        return None, "KYC profile not found"
+
+    screening_results = get_latest_screening_results(
+        db=db,
+        kyc_profile_id=kyc_profile.id
+    )
+
+    return {
+        "investigation_number":
+            investigation.investigation_number,
+
+        "investigation_id":
+            investigation.id,
+
+        "customer_id":
+            investigation.customer_id,
+
+        "company_name":
+            investigation.company_name,
+
+        "status":
+            investigation.status,
+
+        "screening_results": [
+            {
+                "id": result.id,
+                "subject_type": result.subject_type,
+                "subject_id": result.subject_id,
+                "relationship_role":
+                    result.relationship_role,
+                "screening_type":
+                    result.screening_type,
+                "provider":
+                    result.provider,
+                "result":
+                    result.result,
+                "matched_name":
+                    result.matched_name,
+                "match_confidence":
+                    result.match_confidence,
+                "source_uid":
+                    result.source_uid,
+                "country_match":
+                    result.country_match,
+                "identifier_match":
+                    result.identifier_match,
+                "match_strength":
+                    result.match_strength,
+                "evidence_strength":
+                    result.evidence_strength,
+                "evidence":
+                    result.evidence,
+                "checked_at":
+                    result.checked_at
+            }
+            for result in screening_results
+        ]
+    }, None
+
+# ============================================================
+# EVALUATE INVESTIGATION FOR REVIEW
+# ============================================================
+
+def evaluate_investigation_review(
+    db: Session,
+    investigation_number: str
+):
+    investigation = get_investigation_by_number(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if investigation is None:
+        return None, "Investigation not found"
+
+    customer = investigation.customer
+
+    if customer is None:
+        return None, "Investigation customer not found"
+
+    legal_entity_id = customer.legal_entity_id
+
+    if legal_entity_id is None:
+        return None, "Customer is not linked to a legal entity"
+
+    # --------------------------------------------------------
+    # CDD COMPLETENESS
+    # --------------------------------------------------------
+
+    cdd_completeness, error = (
+        check_company_cdd_completeness(
+            db=db,
+            legal_entity_id=legal_entity_id,
+            customer_type="Company"
+        )
+    )
+
+    if error:
+        return None, error
+
+    # --------------------------------------------------------
+    # KYC PROFILE
+    # --------------------------------------------------------
+
+    kyc_profile = customer.kyc_profile
+
+    if kyc_profile is None:
+        return None, "KYC profile not found"
+
+    # --------------------------------------------------------
+    # SCREENING PLAN
+    # --------------------------------------------------------
+
+    subjects = get_company_screening_subjects(
+        db=db,
+        legal_entity_id=legal_entity_id
+    )
+
+    screening_plan = build_screening_plan(
+        subjects
+    )
+
+    # --------------------------------------------------------
+    # SCREENING SUMMARY
+    # --------------------------------------------------------
+
+    screening_summary, error = get_screening_summary(
+        db=db,
+        kyc_profile_id=kyc_profile.id,
+        screening_plan=screening_plan
+    )
+
+    if error:
+        return None, error
+
+    # --------------------------------------------------------
+    # REVIEW DECISION
+    # --------------------------------------------------------
+
+    if not cdd_completeness["is_complete"]:
+        review_status = "REVIEW_REQUIRED"
+        review_reason = "CDD_INCOMPLETE"
+
+    elif not screening_summary["completeness"]["is_complete"]:
+        review_status = "REVIEW_REQUIRED"
+        review_reason = "SCREENING_INCOMPLETE"
+
+    elif (
+        screening_summary["overall_status"]
+        == "CONFIRMED_MATCH"
+    ):
+        review_status = "ESCALATE"
+        review_reason = "CONFIRMED_SCREENING_MATCH"
+
+    elif (
+        screening_summary["overall_status"]
+        in {"MATCH", "REVIEW", "ERROR"}
+    ):
+        review_status = "REVIEW_REQUIRED"
+        review_reason = "SCREENING_REVIEW_REQUIRED"
+
+    else:
+        review_status = "READY_FOR_DECISION"
+        review_reason = "CDD_AND_SCREENING_CLEAR"
+
+    return {
+        "investigation_number":
+            investigation.investigation_number,
+
+        "investigation_status":
+            investigation.status,
+
+        "cdd_completeness":
+            cdd_completeness,
+
+        "screening_summary":
+            screening_summary,
+
+        "review_status":
+            review_status,
+
+        "review_reason":
+            review_reason
+    }, None
 
 # ============================================================
 # UPDATE INVESTIGATION DETAILS

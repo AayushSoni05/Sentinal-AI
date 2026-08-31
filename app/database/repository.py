@@ -804,6 +804,11 @@ def create_screening_result(
     matched_name: str | None = None,
     match_confidence: str | None = None,
     evidence: str | None = None,
+    source_uid: str | None = None,
+    country_match: bool | None = None,
+    identifier_match: bool | None = None,
+    match_strength: str | None = None,
+    evidence_strength: str | None = None,
     checked_at=None
 ):
     screening_result = ScreeningResult(
@@ -818,7 +823,12 @@ def create_screening_result(
         matched_name=matched_name,
         match_confidence=match_confidence,
         evidence=evidence,
-        checked_at=checked_at
+        checked_at=checked_at,
+        source_uid=source_uid,
+        country_match=country_match,
+        identifier_match=identifier_match,
+        match_strength=match_strength,
+        evidence_strength=evidence_strength
     )
 
     db.add(screening_result)
@@ -845,3 +855,32 @@ def get_screening_results(
         )
         .all()
     )
+
+# ============================================================
+# GET LATEST SCREENING RESULTS
+# ============================================================
+
+def get_latest_screening_results(
+    db: Session,
+    kyc_profile_id: str
+):
+    results = get_screening_results(
+        db=db,
+        kyc_profile_id=kyc_profile_id
+    )
+
+    latest_results = {}
+
+    for result in results:
+
+        key = (
+            result.subject_type,
+            result.subject_id,
+            result.relationship_role,
+            result.screening_type
+        )
+
+        if key not in latest_results:
+            latest_results[key] = result
+
+    return list(latest_results.values())
