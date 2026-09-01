@@ -445,6 +445,7 @@ def deduplicate_screening_plan(
         key = (
             task["subject_type"],
             task["subject_id"],
+            task["relationship_role"],
             task["screening_type"]
         )
 

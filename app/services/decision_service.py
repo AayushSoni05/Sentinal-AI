@@ -19,7 +19,8 @@ from app.utils.logger import logger
 from app.database.models import KYCProfile
 
 from app.services.company_cdd_service import (
-    get_company_screening_subjects
+    get_company_screening_subjects,
+    check_company_cdd_completeness
 )
 
 from app.services.screening_service import (
@@ -29,6 +30,10 @@ from app.services.screening_service import (
 
 from app.services.customer_service import (
     validate_customer_entity_link
+)
+
+from app.services.kyc_service import (
+    check_kyc_completeness
 )
 
 # ============================================================
@@ -457,6 +462,42 @@ def approve_decision(
                 None,
                 "Customer linked to investigation not found"
             )
+
+        kyc_profile = customer.kyc_profile
+        if kyc_profile is None:
+            return (
+                None,
+                "Cannot approve investigation: "
+                "KYC profile is incomplete"
+            )
+        if customer.customer_type == "Company":
+
+            legal_entity_id = customer.legal_entity_id
+
+            if legal_entity_id is None:
+                return (
+                    None,
+                    "Cannot approve investigation: "
+                    "Customer is not linked to a legal entity"
+                )
+
+            cdd_completeness, cdd_error = (
+                check_company_cdd_completeness(
+                    db=db,
+                    legal_entity_id=legal_entity_id,
+                    customer_type="Company"
+                )
+            )
+
+            if cdd_error:
+                return None, cdd_error
+
+            if not cdd_completeness["is_complete"]:
+                return (
+                    None,
+                    "Cannot approve investigation: "
+                    "CDD is incomplete"
+                )
 
         create_audit_log(
             db=db,

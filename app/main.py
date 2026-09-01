@@ -6,6 +6,9 @@ from app.api.investigation import router as investigation_router
 from app.api.decision import router as decision_router
 from app.api.user import router as user_router
 from app.api.auth import router as auth_router
+from app.api.entity_relationship import (
+    router as entity_relationship_router
+)
 
 from app.database.connection import engine, Base
 from app.database.models import (
@@ -39,6 +42,7 @@ app.include_router(decision_router)
 app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(kyc_router)
+app.include_router(entity_relationship_router)
 
 
 @app.exception_handler(Exception)

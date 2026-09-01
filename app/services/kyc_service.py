@@ -87,6 +87,86 @@ def get_kyc_profile(
 
     return profile, None
 
+# ============================================================
+# CHECK KYC COMPLETENESS
+# ============================================================
+
+def check_kyc_completeness(
+    db: Session,
+    customer_number: str
+):
+    customer = get_customer_by_number(
+        db=db,
+        customer_number=customer_number
+    )
+
+    if customer is None:
+        return None, "Customer not found"
+
+    profile = (
+        db.query(KYCProfile)
+        .filter(
+            KYCProfile.customer_id == customer.id
+        )
+        .first()
+    )
+
+    if profile is None:
+        return None, "KYC profile not found"
+
+    # These are the KYC fields currently represented
+    # directly in KYCProfile.
+    required_fields = [
+        "identity_type",
+        "identity_number",
+        "onboarding_channel",
+        "customer_country",
+        "source_of_funds_type",
+        "funds_documentation",
+        "monthly_turnover",
+        "actual_monthly_turnover",
+        "product_category"
+    ]
+
+    # Occupation is relevant for individuals.
+    if customer.customer_type == "Individual":
+        required_fields.append("occupation")
+
+    missing_fields = []
+
+    def is_missing(value):
+        if value is None:
+            return True
+
+        if isinstance(value, str):
+            cleaned = value.strip().lower()
+
+            if not cleaned:
+                return True
+
+            if cleaned in {
+                "string",
+                "null",
+                "none",
+                "n/a"
+            }:
+                return True
+
+        return False
+
+    for field in required_fields:
+        value = getattr(profile, field, None)
+
+        if is_missing(value):
+            missing_fields.append(field)
+
+    return {
+        "customer_number": customer.customer_number,
+        "customer_type": customer.customer_type,
+        "kyc_profile_id": profile.id,
+        "is_complete": len(missing_fields) == 0,
+        "missing_fields": missing_fields
+    }, None
 
 # ============================================================
 # UPDATE KYC PROFILE

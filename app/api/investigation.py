@@ -22,6 +22,7 @@ from app.services.investigation_service import (
     delete_investigation_service,
     change_investigation_status,
     search_investigations_service,
+    get_investigation_screening_results,
     get_investigation_match_review
 )
 
