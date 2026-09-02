@@ -434,26 +434,6 @@ def evaluate_investigation_review(
     if customer is None:
         return None, "Investigation customer not found"
 
-    legal_entity_id = customer.legal_entity_id
-
-    if legal_entity_id is None:
-        return None, "Customer is not linked to a legal entity"
-
-    # --------------------------------------------------------
-    # CDD COMPLETENESS
-    # --------------------------------------------------------
-
-    cdd_completeness, error = (
-        check_company_cdd_completeness(
-            db=db,
-            legal_entity_id=legal_entity_id,
-            customer_type="Company"
-        )
-    )
-
-    if error:
-        return None, error
-
     # --------------------------------------------------------
     # KYC PROFILE
     # --------------------------------------------------------
@@ -464,13 +444,61 @@ def evaluate_investigation_review(
         return None, "KYC profile not found"
 
     # --------------------------------------------------------
-    # SCREENING PLAN
+    # CUSTOMER TYPE / CDD / SCREENING SUBJECTS
     # --------------------------------------------------------
 
-    subjects = get_company_screening_subjects(
-        db=db,
-        legal_entity_id=legal_entity_id
-    )
+    if customer.customer_type == "Individual":
+
+        # Individuals do not require company CDD
+        cdd_completeness = {
+            "is_complete": True
+        }
+
+        subjects, error = get_individual_screening_subject(
+            db=db,
+            customer=customer
+        )
+
+        if error:
+            return None, error
+
+    elif customer.customer_type == "Company":
+
+        legal_entity_id = customer.legal_entity_id
+
+        if legal_entity_id is None:
+            return None, "Customer is not linked to a legal entity"
+
+        # ----------------------------------------------------
+        # CDD COMPLETENESS
+        # ----------------------------------------------------
+
+        cdd_completeness, error = (
+            check_company_cdd_completeness(
+                db=db,
+                legal_entity_id=legal_entity_id,
+                customer_type="Company"
+            )
+        )
+
+        if error:
+            return None, error
+
+        # ----------------------------------------------------
+        # SCREENING SUBJECTS
+        # ----------------------------------------------------
+
+        subjects = get_company_screening_subjects(
+            db=db,
+            legal_entity_id=legal_entity_id
+        )
+
+    else:
+        return None, "Unsupported customer type"
+
+    # --------------------------------------------------------
+    # SCREENING PLAN
+    # --------------------------------------------------------
 
     screening_plan = build_screening_plan(
         subjects
@@ -494,10 +522,12 @@ def evaluate_investigation_review(
     # --------------------------------------------------------
 
     if not cdd_completeness["is_complete"]:
+
         review_status = "REVIEW_REQUIRED"
         review_reason = "CDD_INCOMPLETE"
 
     elif not screening_summary["completeness"]["is_complete"]:
+
         review_status = "REVIEW_REQUIRED"
         review_reason = "SCREENING_INCOMPLETE"
 
@@ -505,6 +535,7 @@ def evaluate_investigation_review(
         screening_summary["overall_status"]
         == "CONFIRMED_MATCH"
     ):
+
         review_status = "ESCALATE"
         review_reason = "CONFIRMED_SCREENING_MATCH"
 
@@ -512,10 +543,12 @@ def evaluate_investigation_review(
         screening_summary["overall_status"]
         in {"MATCH", "REVIEW", "ERROR"}
     ):
+
         review_status = "REVIEW_REQUIRED"
         review_reason = "SCREENING_REVIEW_REQUIRED"
 
     else:
+
         review_status = "READY_FOR_DECISION"
         review_reason = "CDD_AND_SCREENING_CLEAR"
 
