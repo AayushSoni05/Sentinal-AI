@@ -463,12 +463,21 @@ def approve_decision(
                 "Customer linked to investigation not found"
             )
 
-        kyc_profile = customer.kyc_profile
-        if kyc_profile is None:
+        kyc_completeness, kyc_error = (
+            check_kyc_completeness(
+                db=db,
+                customer_number=customer.customer_number
+            )
+        )
+
+        if kyc_error:
+            return None, kyc_error
+
+        if not kyc_completeness["is_complete"]:
             return (
                 None,
                 "Cannot approve investigation: "
-                "KYC profile is incomplete"
+                "KYC is incomplete"
             )
         if customer.customer_type == "Company":
 
