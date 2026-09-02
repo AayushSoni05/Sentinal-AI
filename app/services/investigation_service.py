@@ -21,12 +21,13 @@ from app.services.audit_service import create_audit_log
 
 from app.services.company_cdd_service import (
     check_company_cdd_completeness,
-    get_company_screening_subjects
+    get_company_screening_subjects,
 )
 
 from app.services.screening_service import (
     get_screening_summary,
-    build_screening_plan
+    build_screening_plan,
+    execute_screening_plan
 )
 
 # ============================================================
@@ -127,6 +128,136 @@ def get_investigation_service(
         db=db,
         investigation_number=investigation_number
     )
+
+# ============================================================
+# GET INDIVIDUAL SCREENING SUBJECT
+# ============================================================
+
+def get_individual_screening_subject(
+    db: Session,
+    customer
+):
+    if customer.customer_type != "Individual":
+        return None, "Customer is not an Individual"
+
+    person = customer.person
+
+    if person is None:
+        return None, "Individual customer is missing person record"
+
+    return [{
+        "subject_type": "Person",
+        "subject_id": person.id,
+        "name": person.full_name,
+        "relationship_role": "Individual",
+        "subject_country": person.country_of_residence
+    }], None
+
+# ============================================================
+# EXECUTE INVESTIGATION SCREENING
+# ============================================================
+
+def execute_investigation_screening(
+    db: Session,
+    investigation_number: str
+):
+    investigation = get_investigation_by_number(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if investigation is None:
+        return None, "Investigation not found"
+
+    customer = investigation.customer
+
+    if customer is None:
+        return None, "Investigation customer not found"
+
+    kyc_profile = customer.kyc_profile
+
+    if kyc_profile is None:
+        return None, "KYC profile not found"
+
+    # --------------------------------------------------------
+    # BUILD SCREENING SUBJECTS
+    # --------------------------------------------------------
+
+    if customer.customer_type == "Individual":
+
+        subjects, error = get_individual_screening_subject(
+            db=db,
+            customer=customer
+        )
+
+        if error:
+            return None, error
+
+    elif customer.customer_type == "Company":
+
+        if customer.legal_entity_id is None:
+            return None, "Company customer is missing legal entity link"
+
+        subjects = get_company_screening_subjects(
+            db=db,
+            legal_entity_id=customer.legal_entity_id
+        )
+
+    else:
+        return None, "Unsupported customer type"
+
+    # --------------------------------------------------------
+    # BUILD SCREENING PLAN
+    # --------------------------------------------------------
+
+    screening_plan = build_screening_plan(
+        subjects
+    )
+
+    if not screening_plan:
+        return None, "No screening tasks generated"
+
+    # --------------------------------------------------------
+    # EXECUTE SCREENING PLAN
+    # --------------------------------------------------------
+
+    screening_result = execute_screening_plan(
+        db=db,
+        subjects=subjects,
+        kyc_profile_id=kyc_profile.id
+    )
+
+    return {
+        "investigation_number":
+            investigation.investigation_number,
+
+        "investigation_id":
+            investigation.id,
+
+        "customer_id":
+            customer.id,
+
+        "customer_type":
+            customer.customer_type,
+
+        "kyc_profile_id":
+            kyc_profile.id,
+
+        "total_tasks":
+            screening_result["total_tasks"],
+
+        "successful_tasks":
+            screening_result["successful_tasks"],
+
+        "failed_tasks":
+            screening_result["failed_tasks"],
+
+        "results":
+            screening_result["results"],
+
+        "errors":
+            screening_result["errors"]
+    }, None
 
 # ============================================================
 # GET INVESTIGATION MATCH REVIEW

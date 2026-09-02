@@ -50,6 +50,12 @@ SCREENING_TYPES = [
 # ============================================================
 
 SCREENING_POLICY = {
+    "Individual": [
+        "SANCTIONS",
+        "PEP",
+        "ADVERSE_MEDIA"
+    ],
+
     "UBO": [
         "SANCTIONS",
         "PEP",
