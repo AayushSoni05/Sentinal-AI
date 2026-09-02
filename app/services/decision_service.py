@@ -117,21 +117,26 @@ def build_screening_recommendation(
     if investigation is None:
         return None, "Investigation not found"
 
-    if investigation.customer is None:
+    customer = investigation.customer
+
+    if customer is None:
         return None, "Customer linked to investigation not found"
 
     valid, error = validate_customer_entity_link(
-        investigation.customer
+        customer
     )
 
     if not valid:
         return None, error
 
+    # --------------------------------------------------------
+    # KYC PROFILE
+    # --------------------------------------------------------
+
     kyc_profile = (
         db.query(KYCProfile)
         .filter(
-            KYCProfile.customer_id
-            == investigation.customer.id
+            KYCProfile.customer_id == customer.id
         )
         .first()
     )
@@ -139,21 +144,50 @@ def build_screening_recommendation(
     if kyc_profile is None:
         return None, "KYC profile not found"
 
-    legal_entity_id = (
-        investigation.customer.legal_entity_id
-    )
+    # --------------------------------------------------------
+    # CUSTOMER TYPE / SCREENING SUBJECTS
+    # --------------------------------------------------------
 
-    if legal_entity_id is None:
-        return None, "Customer is not linked to a legal entity"
+    if customer.customer_type == "Individual":
 
-    subjects = get_company_screening_subjects(
-        db=db,
-        legal_entity_id=legal_entity_id
-    )
+        from app.services.investigation_service import (
+            get_individual_screening_subject
+        )
+
+        subjects, error = get_individual_screening_subject(
+            db=db,
+            customer=customer
+        )
+
+        if error:
+            return None, error
+
+    elif customer.customer_type == "Company":
+
+        legal_entity_id = customer.legal_entity_id
+
+        if legal_entity_id is None:
+            return None, "Customer is not linked to a legal entity"
+
+        subjects = get_company_screening_subjects(
+            db=db,
+            legal_entity_id=legal_entity_id
+        )
+
+    else:
+        return None, "Unsupported customer type"
+
+    # --------------------------------------------------------
+    # SCREENING PLAN
+    # --------------------------------------------------------
 
     screening_plan = build_screening_plan(
         subjects
     )
+
+    # --------------------------------------------------------
+    # SCREENING SUMMARY
+    # --------------------------------------------------------
 
     screening_summary, error = get_screening_summary(
         db=db,
@@ -164,25 +198,30 @@ def build_screening_recommendation(
     if error:
         return None, error
 
-    recommendation = (
-        recommendation_from_screening_summary(
-            screening_summary
-        )
+    # --------------------------------------------------------
+    # RECOMMENDATION
+    # --------------------------------------------------------
+
+    recommendation = recommendation_from_screening_summary(
+        screening_summary
     )
 
     return {
         "investigation_number":
             investigation.investigation_number,
+
         "kyc_profile_id":
             kyc_profile.id,
+
         "screening_plan":
             screening_plan,
+
         "screening_summary":
             screening_summary,
+
         "recommendation":
             recommendation
     }, None
-
 # ============================================================
 # CREATE RECOMMENDATION
 # ============================================================
