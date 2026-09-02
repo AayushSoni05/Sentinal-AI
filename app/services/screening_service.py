@@ -356,7 +356,7 @@ def build_screening_summary(
 
     for result in screening_results:
 
-        if result.result == "CLEAR":
+        if result.result in {"CLEAR", "NO_MATCH"}:
             summary["clear"] += 1
 
         elif result.result == "MATCH":
