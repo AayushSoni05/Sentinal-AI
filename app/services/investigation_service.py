@@ -227,6 +227,8 @@ def execute_investigation_screening(
         kyc_profile_id=kyc_profile.id
     )
 
+    db.commit()
+
     return {
         "investigation_number":
             investigation.investigation_number,

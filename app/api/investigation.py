@@ -24,7 +24,8 @@ from app.services.investigation_service import (
     search_investigations_service,
     get_investigation_screening_results,
     get_investigation_match_review,
-    execute_investigation_screening
+    execute_investigation_screening,
+    evaluate_investigation_review
 )
 
 
@@ -217,6 +218,41 @@ def execute_investigation_screening_api(
         "executed_by": current_user.username,
         "message": "Investigation screening executed successfully"
     }
+
+# ============================================================
+# EVALUATE INVESTIGATION FOR REVIEW
+# ============================================================
+
+@router.get(
+    "/investigations/{investigation_number}/review-evaluation"
+)
+def evaluate_investigation_review_api(
+    investigation_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
+):
+    result, error = evaluate_investigation_review(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if result is None:
+        status_code = (
+            404
+            if error in {
+                "Investigation not found",
+                "Investigation customer not found",
+                "KYC profile not found"
+            }
+            else 400
+        )
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=error
+        )
+
+    return result
 
 # ============================================================
 # UPDATE INVESTIGATION DETAILS

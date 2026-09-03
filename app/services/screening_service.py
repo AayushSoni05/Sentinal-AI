@@ -10,7 +10,8 @@ import json
 
 from app.database.repository import (
     create_screening_result,
-     get_screening_results
+     get_screening_results,
+     get_latest_screening_results
 )
 from app.services.screening_providers import (
     MockScreeningProvider
@@ -295,7 +296,25 @@ def execute_screening_task(
     if error:
         return None, error
 
-    return screening_result, None
+    return {
+    "id": screening_result.id,
+    "kyc_profile_id": screening_result.kyc_profile_id,
+    "subject_type": screening_result.subject_type,
+    "subject_id": screening_result.subject_id,
+    "relationship_role": screening_result.relationship_role,
+    "screening_type": screening_result.screening_type,
+    "provider": screening_result.provider,
+    "result": screening_result.result,
+    "matched_name": screening_result.matched_name,
+    "match_confidence": screening_result.match_confidence,
+    "evidence": screening_result.evidence,
+    "checked_at": screening_result.checked_at,
+    "source_uid": screening_result.source_uid,
+    "country_match": screening_result.country_match,
+    "identifier_match": screening_result.identifier_match,
+    "match_strength": screening_result.match_strength,
+    "evidence_strength": screening_result.evidence_strength
+}, None
 
 # ============================================================
 # EXECUTE SCREENING PLAN
@@ -414,13 +433,11 @@ def get_screening_summary(
     kyc_profile_id: str,
     screening_plan
 ):
-    results, error = get_screening_results_service(
+    results = get_latest_screening_results(
         db=db,
         kyc_profile_id=kyc_profile_id
     )
-
-    if error:
-        return None, error
+    error = None
 
     completeness = check_screening_completeness(
         screening_plan=screening_plan,

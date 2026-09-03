@@ -15,7 +15,8 @@ from app.services.decision_service import (
     create_decision,
     get_decision,
     submit_analyst_decision,
-    approve_decision
+    approve_decision,
+    build_screening_recommendation
 )
 
 
@@ -197,3 +198,38 @@ def final_decision(
         "decided_by": current_user.username,
         "message": "Final checker decision recorded successfully"
     }
+
+# ============================================================
+# BUILD AUTOMATIC DECISION RECOMMENDATION
+# ============================================================
+
+@router.get(
+    "/investigations/{investigation_number}/decision/screening-recommendation"
+)
+def screening_recommendation(
+    investigation_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_checker)
+):
+    result, error = build_screening_recommendation(
+        db=db,
+        investigation_number=investigation_number
+    )
+
+    if result is None:
+        status_code = (
+            404
+            if error in {
+                "Investigation not found",
+                "Customer linked to investigation not found",
+                "KYC profile not found"
+            }
+            else 400
+        )
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=error
+        )
+
+    return result
