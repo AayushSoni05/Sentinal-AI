@@ -8,7 +8,8 @@ from app.database.models import (
     Role,
     User,
     EntityRelationship,
-    ScreeningResult
+    ScreeningResult,
+    RiskAssessment
 )
 
 
@@ -884,3 +885,72 @@ def get_latest_screening_results(
             latest_results[key] = result
 
     return list(latest_results.values())
+
+
+# ============================================================
+# RISK ASSESSMENT FUNCTIONS
+# ============================================================
+
+def create_risk_assessment(
+    db: Session,
+    risk_assessment_id: str,
+    investigation_id: str,
+    risk_score: int,
+    risk_tier: str,
+    assessment_status: str,
+    assessment_reason: str | None = None
+):
+    risk_assessment = RiskAssessment(
+        id=risk_assessment_id,
+        investigation_id=investigation_id,
+        risk_score=str(risk_score),
+        risk_tier=risk_tier,
+        assessment_status=assessment_status,
+        assessment_reason=assessment_reason
+    )
+
+    db.add(risk_assessment)
+    db.commit()
+    db.refresh(risk_assessment)
+
+    return risk_assessment
+
+
+def get_risk_assessment(
+    db: Session,
+    investigation_id: str
+):
+    return (
+        db.query(RiskAssessment)
+        .filter(
+            RiskAssessment.investigation_id == investigation_id
+        )
+        .first()
+    )
+
+
+def update_risk_assessment(
+    db: Session,
+    investigation_id: str,
+    risk_score: int,
+    risk_tier: str,
+    assessment_status: str,
+    assessment_reason: str | None = None
+):
+    risk_assessment = get_risk_assessment(
+        db=db,
+        investigation_id=investigation_id
+    )
+
+    if risk_assessment is None:
+        return None
+
+    risk_assessment.risk_score = str(risk_score)
+    risk_assessment.risk_tier = risk_tier
+    risk_assessment.assessment_status = assessment_status
+    risk_assessment.assessment_reason = assessment_reason
+
+    db.commit()
+    db.refresh(risk_assessment)
+
+    return risk_assessment

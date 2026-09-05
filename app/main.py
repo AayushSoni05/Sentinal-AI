@@ -23,6 +23,8 @@ from app.utils.logger import logger
 
 from app.api.kyc import router as kyc_router
 
+from app.api import risk_assessment
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -43,6 +45,9 @@ app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(kyc_router)
 app.include_router(entity_relationship_router)
+app.include_router(
+    risk_assessment.router
+)
 
 
 @app.exception_handler(Exception)

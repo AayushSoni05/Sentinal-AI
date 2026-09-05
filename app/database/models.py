@@ -712,6 +712,12 @@ class Investigation(Base):
         uselist=False
     )
 
+    risk_assessment = relationship(
+        "RiskAssessment",
+        back_populates="investigation",
+        uselist=False
+    )
+
     company_name = Column(
         String,
         nullable=False
@@ -934,4 +940,63 @@ class AuditLog(Base):
 
     user = relationship(
         "User"
+    )
+
+# ============================================================
+# RISK ASSESSMENT
+# ============================================================
+
+class RiskAssessment(Base):
+
+    __tablename__ = "risk_assessments"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    investigation_id = Column(
+        String,
+        ForeignKey("investigations.id"),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    risk_score = Column(
+        String,
+        nullable=True
+    )
+
+    risk_tier = Column(
+        String,
+        nullable=True
+    )
+
+    assessment_status = Column(
+        String,
+        nullable=False,
+        default="Pending"
+    )
+
+    assessment_reason = Column(
+        String,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    investigation = relationship(
+        "Investigation",
+        back_populates="risk_assessment"
     )
