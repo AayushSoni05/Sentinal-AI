@@ -1000,3 +1000,66 @@ class RiskAssessment(Base):
         "Investigation",
         back_populates="risk_assessment"
     )
+
+# ============================================================
+# RISK RULE
+# ============================================================
+
+class RiskRule(Base):
+
+    __tablename__ = "risk_rules"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    rule_name = Column(
+        String,
+        nullable=False,
+        unique=True
+    )
+
+    factor = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    min_score = Column(
+        String,
+        nullable=False
+    )
+
+    max_score = Column(
+        String,
+        nullable=False
+    )
+
+    risk_tier = Column(
+        String,
+        nullable=False
+    )
+
+    action = Column(
+        String,
+        nullable=False
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )

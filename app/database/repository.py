@@ -9,7 +9,8 @@ from app.database.models import (
     User,
     EntityRelationship,
     ScreeningResult,
-    RiskAssessment
+    RiskAssessment,
+    RiskRule
 )
 
 
@@ -954,3 +955,73 @@ def update_risk_assessment(
     db.refresh(risk_assessment)
 
     return risk_assessment
+
+# ============================================================
+# RISK RULE FUNCTIONS
+# ============================================================
+
+def create_risk_rule(
+    db: Session,
+    rule_id: str,
+    rule_name: str,
+    factor: str,
+    min_score: float,
+    max_score: float,
+    risk_tier: str,
+    action: str,
+    is_active: bool = True
+):
+    risk_rule = RiskRule(
+        id=rule_id,
+        rule_name=rule_name,
+        factor=factor,
+        min_score=str(min_score),
+        max_score=str(max_score),
+        risk_tier=risk_tier,
+        action=action,
+        is_active=is_active
+    )
+
+    db.add(risk_rule)
+    db.commit()
+    db.refresh(risk_rule)
+
+    return risk_rule
+
+
+def get_active_risk_rules(
+    db: Session,
+    factor: str | None = None
+):
+    query = (
+        db.query(RiskRule)
+        .filter(
+            RiskRule.is_active == True
+        )
+    )
+
+    if factor is not None:
+        query = query.filter(
+            RiskRule.factor == factor
+        )
+
+    return (
+        query
+        .order_by(
+            RiskRule.min_score.asc()
+        )
+        .all()
+    )
+
+
+def get_risk_rule_by_name(
+    db: Session,
+    rule_name: str
+):
+    return (
+        db.query(RiskRule)
+        .filter(
+            RiskRule.rule_name == rule_name
+        )
+        .first()
+    )

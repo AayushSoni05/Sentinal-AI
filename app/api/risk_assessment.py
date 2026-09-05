@@ -5,7 +5,10 @@ from app.database.connection import SessionLocal
 from app.auth.dependencies import get_current_user
 from app.database.models import User
 from app.services.risk_assessment_service import build_risk_assessment
-
+from app.services.risk_assessment_service import (
+    build_risk_assessment,
+    evaluate_risk_rule_by_score
+)
 
 router = APIRouter()
 
@@ -53,3 +56,22 @@ def get_risk_assessment(
         )
 
     return result
+
+# ============================================================
+# TEST RISK RULE
+# ============================================================
+
+@router.get(
+    "/risk-rules/test"
+)
+def test_risk_rule(
+    factor: str,
+    hit_score: float,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return evaluate_risk_rule_by_score(
+        db=db,
+        factor=factor,
+        hit_score=hit_score
+    )
