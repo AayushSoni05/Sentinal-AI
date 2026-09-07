@@ -48,5 +48,11 @@ class MockScreeningProvider(
             "evidence": f"Mock screening for {name}",
             "subject_type": subject_type,
             "subject_id": subject_id,
-            "relationship_role": relationship_role
+            "relationship_role": relationship_role,
+
+            "adverse_media_category": None,
+            "adverse_media_headline": None,
+            "adverse_media_summary": None,
+            "adverse_media_source": None,
+            "adverse_media_published_date": None
         }
