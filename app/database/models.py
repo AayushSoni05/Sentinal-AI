@@ -663,6 +663,31 @@ class ScreeningResult(Base):
         nullable=True
     )
 
+    adverse_media_category = Column(
+        String,
+        nullable=True
+    )
+
+    adverse_media_headline = Column(
+        String,
+        nullable=True
+    )
+
+    adverse_media_summary = Column(
+        String,
+        nullable=True
+    )
+
+    adverse_media_source = Column(
+        String,
+        nullable=True
+    )
+
+    adverse_media_published_date = Column(
+        DateTime,
+        nullable=True
+    )
+
     checked_at = Column(
         DateTime,
         default=datetime.utcnow

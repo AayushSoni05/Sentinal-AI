@@ -811,6 +811,11 @@ def create_screening_result(
     identifier_match: bool | None = None,
     match_strength: str | None = None,
     evidence_strength: str | None = None,
+    adverse_media_category: str | None = None,
+    adverse_media_headline: str | None = None,
+    adverse_media_summary: str | None = None,
+    adverse_media_source: str | None = None,
+    adverse_media_published_date=None,
     checked_at=None
 ):
     screening_result = ScreeningResult(
@@ -830,7 +835,12 @@ def create_screening_result(
         country_match=country_match,
         identifier_match=identifier_match,
         match_strength=match_strength,
-        evidence_strength=evidence_strength
+        evidence_strength=evidence_strength,
+        adverse_media_category=adverse_media_category,
+        adverse_media_headline=adverse_media_headline,
+        adverse_media_summary=adverse_media_summary,
+        adverse_media_source=adverse_media_source,
+        adverse_media_published_date=adverse_media_published_date,
     )
 
     db.add(screening_result)

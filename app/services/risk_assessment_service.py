@@ -129,7 +129,7 @@ def build_risk_assessment(
         kyc_profile_id=kyc_result["kyc_profile_id"]
     )
 
-        # --------------------------------------------------------
+    # --------------------------------------------------------
     # PEP RISK
     # --------------------------------------------------------
 
@@ -211,6 +211,27 @@ def build_risk_assessment(
         })
 
     # --------------------------------------------------------
+    # ADVERSE MEDIA RISK
+    # --------------------------------------------------------
+
+    if adverse_media_assessment["recommended_action"] == "REVIEW":
+
+        score += 25
+
+        factors.append({
+            "factor": "ADVERSE_MEDIA",
+            "score": 25,
+            "match_score": adverse_media_assessment["match_score"],
+            "category": adverse_media_assessment["category"],
+            "headline": adverse_media_assessment["headline"],
+            "summary": adverse_media_assessment["summary"],
+            "source": adverse_media_assessment["source"],
+            "published_date": adverse_media_assessment["published_date"],
+            "action": adverse_media_assessment["recommended_action"],
+            "reason": adverse_media_assessment["reason"]
+        })
+
+    # --------------------------------------------------------
     # CAP SCORE
     # --------------------------------------------------------
 
@@ -280,6 +301,7 @@ def build_risk_assessment(
                 if (
                     sanctions_assessment["action"] == "REVIEW"
                     or pep_assessment["recommended_action"] == "REVIEW"
+                    or adverse_media_assessment["recommended_action"] == "REVIEW"
                 )
                 else "CLEAR"
             )
@@ -551,25 +573,23 @@ def evaluate_adverse_media_risk(
     if result is None:
         return {
             "factor": "ADVERSE_MEDIA",
-            "score": 0,
+            "match_score": 0.0,
             "recommended_action": "CLEAR",
+            "category": None,
+            "headline": None,
+            "summary": None,
+            "source": None,
+            "published_date": None,
             "reason": "No adverse media screening result found"
         }
 
-    if result.result in {
-        "CONFIRMED_MATCH",
-        "MATCH",
-        "POSSIBLE_MATCH"
-    }:
-        return {
-            "factor": "ADVERSE_MEDIA",
-            "score": 0,
-            "recommended_action": "REVIEW",
-            "reason": (
-                f"Adverse media screening result: "
-                f"{result.result}"
-            )
-        }
+    match_score = 0.0
+
+    if result.match_confidence is not None:
+        try:
+            match_score = float(result.match_confidence)
+        except (TypeError, ValueError):
+            match_score = 0.0
 
     if result.result in {
         "CLEAR",
@@ -577,17 +597,27 @@ def evaluate_adverse_media_risk(
     }:
         return {
             "factor": "ADVERSE_MEDIA",
-            "score": 0,
+            "match_score": match_score,
             "recommended_action": "CLEAR",
+            "category": None,
+            "headline": None,
+            "summary": None,
+            "source": None,
+            "published_date": None,
             "reason": "No adverse media concern detected"
         }
 
     return {
         "factor": "ADVERSE_MEDIA",
-        "score": 0,
+        "match_score": match_score,
         "recommended_action": "REVIEW",
+        "category": result.adverse_media_category,
+        "headline": result.adverse_media_headline,
+        "summary": result.adverse_media_summary,
+        "source": result.adverse_media_source,
+        "published_date": result.adverse_media_published_date,
         "reason": (
-            f"Adverse media screening returned "
+            f"Adverse media screening result: "
             f"{result.result}"
         )
     }

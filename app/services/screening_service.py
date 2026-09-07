@@ -271,6 +271,21 @@ def execute_screening_task(
         matched_name=provider_result["matched_name"],
         match_confidence=provider_result["match_confidence"],
         evidence=evidence,
+        adverse_media_category=provider_result.get(
+            "adverse_media_category"
+        ),
+        adverse_media_headline=provider_result.get(
+            "adverse_media_headline"
+        ),
+        adverse_media_summary=provider_result.get(
+            "adverse_media_summary"
+        ),
+        adverse_media_source=provider_result.get(
+            "adverse_media_source"
+        ),
+        adverse_media_published_date=provider_result.get(
+            "adverse_media_published_date"
+        ),
         source_uid=(
             provider_result["evidence"].get("uid")
             if isinstance(
@@ -313,7 +328,12 @@ def execute_screening_task(
     "country_match": screening_result.country_match,
     "identifier_match": screening_result.identifier_match,
     "match_strength": screening_result.match_strength,
-    "evidence_strength": screening_result.evidence_strength
+    "evidence_strength": screening_result.evidence_strength,
+    "adverse_media_category": screening_result.adverse_media_category,
+    "adverse_media_headline": screening_result.adverse_media_headline,
+    "adverse_media_summary": screening_result.adverse_media_summary,
+    "adverse_media_source": screening_result.adverse_media_source,
+    "adverse_media_published_date": screening_result.adverse_media_published_date
 }, None
 
 # ============================================================
@@ -502,6 +522,11 @@ def save_screening_result(
     identifier_match: bool | None = None,
     match_strength: str | None = None,
     evidence_strength: str | None = None,
+    adverse_media_category: str | None = None,
+    adverse_media_headline: str | None = None,
+    adverse_media_summary: str | None = None,
+    adverse_media_source: str | None = None,
+    adverse_media_published_date=None,
 ):
     valid, error = validate_screening_result(
         result
@@ -529,7 +554,12 @@ def save_screening_result(
         country_match=country_match,
         identifier_match=identifier_match,
         match_strength=match_strength,
-        evidence_strength=evidence_strength
+        evidence_strength=evidence_strength,
+        adverse_media_category=adverse_media_category,
+        adverse_media_headline=adverse_media_headline,
+        adverse_media_summary=adverse_media_summary,
+        adverse_media_source=adverse_media_source,
+        adverse_media_published_date=adverse_media_published_date,
     )
 
     return screening_result, None
