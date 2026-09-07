@@ -218,7 +218,33 @@ def get_company_screening_subjects(
         legal_entity_id=legal_entity_id
     )
 
+    legal_entity = (
+        db.query(LegalEntity)
+        .filter(
+            LegalEntity.id == legal_entity_id
+        )
+        .first()
+    )
+
+    if legal_entity is None:
+        return []
+    
     subjects = []
+    # --------------------------------------------------------
+    # COMPANY / LEGAL ENTITY ITSELF
+    # --------------------------------------------------------
+
+    subjects.append({
+        "subject_type": "LegalEntity",
+        "subject_id": legal_entity.id,
+        "name": legal_entity.legal_name,
+        "relationship_role": "Customer",
+        "subject_country": legal_entity.country_of_incorporation,
+        "subject_identifiers": {
+            "registration_number":
+                legal_entity.registration_number
+        }
+    })
 
     included_roles = {
         "directors",

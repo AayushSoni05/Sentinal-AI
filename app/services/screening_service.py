@@ -57,6 +57,12 @@ SCREENING_POLICY = {
         "ADVERSE_MEDIA"
     ],
 
+    "Customer": [
+        "SANCTIONS",
+        "PEP",
+        "ADVERSE_MEDIA"
+    ],
+
     "UBO": [
         "SANCTIONS",
         "PEP",
