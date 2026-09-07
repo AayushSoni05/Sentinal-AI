@@ -1027,6 +1027,11 @@ class RiskRule(Base):
         index=True
     )
 
+    condition = Column(
+        String,
+        nullable=True
+    )
+
     min_score = Column(
         String,
         nullable=False

@@ -10,6 +10,16 @@ DEFAULT_RISK_RULES = [
     {
         "rule_name": "OFAC Confirmed",
         "factor": "SANCTIONS",
+        "condition": "SCORE_RANGE",
+        "min_score": 100,
+        "max_score": 100,
+        "risk_tier": "CRITICAL",
+        "action": "BLOCK"
+    },
+    {
+        "rule_name": "PEP Confirmed",
+        "factor": "PEP",
+        "condition": "SCORE_RANGE",
         "min_score": 100,
         "max_score": 100,
         "risk_tier": "CRITICAL",
@@ -18,6 +28,7 @@ DEFAULT_RISK_RULES = [
     {
         "rule_name": "OFAC High Risk",
         "factor": "SANCTIONS",
+        "condition": "SCORE_RANGE",
         "min_score": 95,
         "max_score": 99.99,
         "risk_tier": "HIGH",
@@ -26,6 +37,7 @@ DEFAULT_RISK_RULES = [
     {
         "rule_name": "OFAC Review",
         "factor": "SANCTIONS",
+        "condition": "SCORE_RANGE",
         "min_score": 85,
         "max_score": 94.99,
         "risk_tier": "HIGH",
@@ -50,6 +62,7 @@ def seed_risk_rules():
             )
 
             if existing_rule:
+                existing_rule.condition = rule_data["condition"]
                 print(
                     f"Risk rule already exists: "
                     f"{rule_data['rule_name']}"
@@ -60,6 +73,7 @@ def seed_risk_rules():
                 id=str(uuid4()),
                 rule_name=rule_data["rule_name"],
                 factor=rule_data["factor"],
+                condition=rule_data["condition"],
                 min_score=str(
                     rule_data["min_score"]
                 ),

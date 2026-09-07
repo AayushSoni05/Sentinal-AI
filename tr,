@@ -1,0 +1,20 @@
+[1mdiff --git a/app/database/repository.py b/app/database/repository.py[m
+[1mindex 49d46d5..067643c 100644[m
+[1m--- a/app/database/repository.py[m
+[1m+++ b/app/database/repository.py[m
+[36m@@ -965,6 +965,7 @@[m [mdef create_risk_rule([m
+     rule_id: str,[m
+     rule_name: str,[m
+     factor: str,[m
+[32m+[m[32m    condition: str,[m
+     min_score: float,[m
+     max_score: float,[m
+     risk_tier: str,[m
+[36m@@ -975,6 +976,7 @@[m [mdef create_risk_rule([m
+         id=rule_id,[m
+         rule_name=rule_name,[m
+         factor=factor,[m
+[32m+[m[32m        condition=condition,[m
+         min_score=str(min_score),[m
+         max_score=str(max_score),[m
+         risk_tier=risk_tier,[m
