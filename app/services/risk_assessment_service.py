@@ -129,6 +129,45 @@ def build_risk_assessment(
         kyc_profile_id=kyc_result["kyc_profile_id"]
     )
 
+        # --------------------------------------------------------
+    # PEP RISK
+    # --------------------------------------------------------
+
+    pep_score = pep_assessment["score"]
+
+    if pep_assessment["recommended_action"] == "BLOCK":
+        score = 100
+
+        factors.append({
+            "factor": "PEP",
+            "score": 100,
+            "hit_score": pep_assessment["hit_score"],
+            "risk_tier": pep_assessment["risk_tier"],
+            "action": pep_assessment["recommended_action"],
+            "rule_name": pep_assessment["rule_name"],
+            "reason": (
+                f"PEP hit score "
+                f"{pep_assessment['hit_score']} triggered "
+                "a blocking rule"
+            )
+        })
+
+    elif pep_assessment["recommended_action"] == "REVIEW":
+        score += pep_score
+
+        factors.append({
+            "factor": "PEP",
+            "score": pep_score,
+            "hit_score": pep_assessment["hit_score"],
+            "risk_tier": pep_assessment["risk_tier"],
+            "action": pep_assessment["recommended_action"],
+            "rule_name": pep_assessment["rule_name"],
+            "reason": (
+                f"PEP hit score "
+                f"{pep_assessment['hit_score']} requires review"
+            )
+        })
+
     sanctions_hit_score = sanctions_assessment["hit_score"]
 
     if sanctions_assessment["action"] == "BLOCK":
@@ -230,7 +269,21 @@ def build_risk_assessment(
         "risk_assessment_id": existing_assessment.id,
         "risk_score": score,
         "risk_tier": risk_tier,
-        "recommended_action": sanctions_assessment["action"],
+        "recommended_action": (
+            "BLOCK"
+            if (
+                sanctions_assessment["action"] == "BLOCK"
+                or pep_assessment["recommended_action"] == "BLOCK"
+            )
+            else (
+                "REVIEW"
+                if (
+                    sanctions_assessment["action"] == "REVIEW"
+                    or pep_assessment["recommended_action"] == "REVIEW"
+                )
+                else "CLEAR"
+            )
+        ),
         "assessment_status": assessment_status,
         "assessment_reason": assessment_reason,
         "sanctions": {
@@ -417,24 +470,12 @@ def evaluate_pep_risk(
     if result is None:
         return {
             "factor": "PEP",
+            "hit_score": 0.0,
             "score": 0,
+            "rule_name": None,
+            "risk_tier": None,
             "recommended_action": "CLEAR",
             "reason": "No PEP screening result found"
-        }
-
-    if result.result in {
-        "CONFIRMED_MATCH",
-        "MATCH",
-        "POSSIBLE_MATCH"
-    }:
-        return {
-            "factor": "PEP",
-            "score": 0,
-            "recommended_action": "REVIEW",
-            "reason": (
-                f"PEP screening result: "
-                f"{result.result}"
-            )
         }
 
     if result.result in {
@@ -443,18 +484,53 @@ def evaluate_pep_risk(
     }:
         return {
             "factor": "PEP",
+            "hit_score": 0.0,
             "score": 0,
+            "rule_name": None,
+            "risk_tier": None,
             "recommended_action": "CLEAR",
             "reason": "No PEP concern detected"
         }
 
+    hit_score = 0.0
+
+    if result.match_confidence is not None:
+        try:
+            hit_score = float(result.match_confidence)
+        except (TypeError, ValueError):
+            hit_score = 0.0
+
+    rule = find_matching_risk_rule(
+        db=db,
+        factor="PEP",
+        hit_score=hit_score
+    )
+
+    if rule is None:
+        return {
+            "factor": "PEP",
+            "hit_score": hit_score,
+            "score": 0,
+            "rule_name": None,
+            "risk_tier": None,
+            "recommended_action": "REVIEW",
+            "reason": (
+                f"PEP screening result: "
+                f"{result.result}"
+            )
+        }
+
     return {
         "factor": "PEP",
-        "score": 0,
-        "recommended_action": "REVIEW",
+        "hit_score": hit_score,
+        "score": float(rule.max_score),
+        "rule_name": rule.rule_name,
+        "risk_tier": rule.risk_tier,
+        "recommended_action": rule.action,
         "reason": (
-            f"PEP screening returned "
-            f"{result.result}"
+            f"PEP screening result: "
+            f"{result.result} matched rule "
+            f"{rule.rule_name}"
         )
     }
 
