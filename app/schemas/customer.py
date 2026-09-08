@@ -23,3 +23,15 @@ class PersonRequest(BaseModel):
     country_of_residence: str | None = None
     identity_type: str | None = None
     identity_number: str | None = None
+
+class LegalEntityRequest(BaseModel):
+    legal_name: str
+    trading_name: str | None = None
+    entity_type: str
+    registration_number: str | None = None
+    incorporation_date: str | None = None
+    country_of_incorporation: str | None = None
+    registered_address: str | None = None
+    principal_business_address: str | None = None
+    business_activity: str | None = None
+    industry: str | None = None

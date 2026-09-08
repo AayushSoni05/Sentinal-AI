@@ -30,6 +30,8 @@ from app.services.screening_service import (
     execute_screening_plan
 )
 
+from app.database.models import Person, LegalEntity
+
 # ============================================================
 # INVESTIGATION LIFECYCLE
 # ============================================================
@@ -297,6 +299,17 @@ def get_investigation_match_review(
             "id": result.id,
             "subject_type": result.subject_type,
             "subject_id": result.subject_id,
+            "subject_number": (
+                db.query(Person).filter(
+                    Person.id == result.subject_id
+                ).first().person_number
+                if result.subject_type == "Person"
+                else db.query(LegalEntity).filter(
+                    LegalEntity.id == result.subject_id
+                ).first().legal_entity_number
+                if result.subject_type == "LegalEntity"
+                else None
+            ),
             "relationship_role": result.relationship_role,
             "screening_type": result.screening_type,
             "provider": result.provider,
@@ -364,12 +377,8 @@ def get_investigation_screening_results(
     )
 
     return {
-        "investigation_number":
-            investigation.investigation_number,
-
-        "investigation_id":
-            investigation.id,
-
+        "customer_number":
+            customer.customer_number,
         "customer_id":
             investigation.customer_id,
 
@@ -384,6 +393,25 @@ def get_investigation_screening_results(
                 "id": result.id,
                 "subject_type": result.subject_type,
                 "subject_id": result.subject_id,
+                "subject_number": (
+                    db.query(Person).filter(
+                        Person.id == result.subject_id
+                    ).first().person_number
+                    if result.subject_type == "Person"
+                    and db.query(Person).filter(
+                        Person.id == result.subject_id
+                    ).first()
+                    else (
+                        db.query(LegalEntity).filter(
+                            LegalEntity.id == result.subject_id
+                        ).first().legal_entity_number
+                        if result.subject_type == "LegalEntity"
+                        and db.query(LegalEntity).filter(
+                            LegalEntity.id == result.subject_id
+                        ).first()
+                        else None
+                    )
+                ),
                 "relationship_role":
                     result.relationship_role,
                 "screening_type":

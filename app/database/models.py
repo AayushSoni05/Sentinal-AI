@@ -119,6 +119,13 @@ class Person(Base):
         index=True
     )
 
+    person_number = Column(
+        String,
+        unique=True,
+        nullable=True,
+        index=True
+    )
+
     full_name = Column(
         String,
         nullable=False

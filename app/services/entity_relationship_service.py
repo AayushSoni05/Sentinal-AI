@@ -10,6 +10,8 @@ from app.database.repository import (
     create_entity_relationship
 )
 
+from app.database.models import EntityRelationship
+
 
 # ============================================================
 # ALLOWED ENTITY RELATIONSHIP TYPES
@@ -263,6 +265,23 @@ def create_entity_relationship_service(
 
     if not valid:
         return None, error
+
+    existing_relationship = (
+        db.query(EntityRelationship)
+        .filter(
+            EntityRelationship.relationship_type == relationship_type,
+            EntityRelationship.from_person_id == from_person_id,
+            EntityRelationship.from_legal_entity_id == from_legal_entity_id,
+            EntityRelationship.to_legal_entity_id == to_legal_entity_id
+        )
+        .first()
+    )
+
+    if existing_relationship:
+        return (
+            None,
+            "Identical entity relationship already exists"
+        )
 
     relationship_id = str(uuid4())
 

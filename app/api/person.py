@@ -40,6 +40,7 @@ def create_person_endpoint(
 
     return {
         "person_id": person.id,
+        "person_number": person.person_number,
         "full_name": person.full_name,
         "date_of_birth": person.date_of_birth,
         "nationality": person.nationality,

@@ -63,7 +63,9 @@ def get_company_relationships(
                     "subject_id": person.id,
                     "name": person.full_name,
                     "subject_country": person.country_of_residence,
-                    "subject_identifiers": None,
+                    "subject_identifiers": {
+                        "person_number": person.person_number
+                    },
                     "ownership_percentage":
                         relationship.ownership_percentage,
                     "voting_percentage":
@@ -92,7 +94,9 @@ def get_company_relationships(
                     "subject_id": entity.id,
                     "name": entity.legal_name,
                     "subject_country":entity.country_of_incorporation,
-                    "subject_identifiers": None,
+                    "subject_identifiers": {
+                        "legal_entity_number": entity.legal_entity_number
+                    },
                     "ownership_percentage":
                         relationship.ownership_percentage,
                     "voting_percentage":
