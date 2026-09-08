@@ -73,6 +73,11 @@ def create_customer(
         "gst_cin": customer.gst_cin,
         "person_id": customer.person_id,
         "legal_entity_id": customer.legal_entity_id,
+        "legal_entity_number": (
+            customer.legal_entity.legal_entity_number
+            if customer.legal_entity
+            else None
+            ),
         "status": customer.status,
         "created_at": customer.created_at,
         "created_by": current_user.username,

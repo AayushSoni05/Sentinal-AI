@@ -46,12 +46,40 @@ def create_new_customer(
     customer_id = str(uuid4())
     person_id = None
     legal_entity_id = None
+    legal_entity_number = None
 
     if customer_type == "Individual":
         person_id = str(uuid4())
 
     elif customer_type == "Company":
         legal_entity_id = str(uuid4())
+
+        today = datetime.now().strftime("%Y%m%d")
+
+        latest_legal_entity = (
+            db.query(LegalEntity)
+            .filter(
+                LegalEntity.legal_entity_number.like(
+                    f"LE-{today}-%"
+                )
+            )
+            .order_by(
+                LegalEntity.legal_entity_number.desc()
+            )
+            .first()
+        )
+
+        if latest_legal_entity:
+            last_number = int(
+                latest_legal_entity.legal_entity_number.split("-")[-1]
+            )
+            next_number = last_number + 1
+        else:
+            next_number = 1
+
+        legal_entity_number = (
+            f"LE-{today}-{next_number:06d}"
+        )
 
     if customer_type == "Individual":
         person = Person(
@@ -65,6 +93,7 @@ def create_new_customer(
     elif customer_type == "Company":
         legal_entity = LegalEntity(
             id=legal_entity_id,
+            legal_entity_number=legal_entity_number,
             legal_name=name,
             entity_type=customer_type,
             country_of_incorporation=country

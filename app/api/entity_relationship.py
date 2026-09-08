@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
 from app.auth.roles import require_maker
-from app.database.models import User
+from app.database.models import User, Customer
 
 from app.services.entity_relationship_service import (
     create_entity_relationship_service
@@ -47,14 +47,41 @@ class EntityRelationshipRequest(BaseModel):
 
 
 @router.post(
-    "/legal-entities/{legal_entity_id}/relationships"
+    "/customers/{customer_number}/relationships"
 )
 def create_entity_relationship(
-    legal_entity_id: str,
+    customer_number: str,
     request: EntityRelationshipRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_maker)
 ):
+    customer = (
+        db.query(Customer)
+        .filter(
+            Customer.customer_number == customer_number
+        )
+        .first()
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Customer not found"
+        )
+
+    if customer.customer_type != "Company":
+        raise HTTPException(
+            status_code=400,
+            detail="Relationships are only available for Company customers"
+        )
+
+    if not customer.legal_entity_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Company customer is missing legal entity"
+        )
+
+    legal_entity_id = customer.legal_entity_id
     relationship, error = (
         create_entity_relationship_service(
             db=db,

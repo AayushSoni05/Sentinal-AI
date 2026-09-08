@@ -186,6 +186,13 @@ class LegalEntity(Base):
         index=True
     )
 
+    legal_entity_number = Column(
+        String,
+        unique=True,
+        nullable=True,
+        index=True
+    )
+
     legal_name = Column(
         String,
         nullable=False
