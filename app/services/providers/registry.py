@@ -5,17 +5,21 @@
 from app.services.screening_providers import (
     MockScreeningProvider
 )
-
 from app.services.providers.ofac.provider import (
     OFACSanctionsProvider
 )
+from app.services.providers.unsc.provider import (
+    UNSCSanctionsProvider
+)
+
 
 # ============================================================
 # PROVIDER REGISTRY
 # ============================================================
 
 SCREENING_PROVIDER_REGISTRY = {
-    "SANCTIONS": OFACSanctionsProvider,
+    "UNSC": UNSCSanctionsProvider,
+    "OFAC": OFACSanctionsProvider,
     "PEP": MockScreeningProvider,
     "ADVERSE_MEDIA": MockScreeningProvider
 }
@@ -31,11 +35,9 @@ def get_screening_provider(
     provider_class = SCREENING_PROVIDER_REGISTRY.get(
         screening_type
     )
-
     if provider_class is None:
         raise ValueError(
             f"No screening provider configured for "
             f"{screening_type}"
         )
-
     return provider_class()

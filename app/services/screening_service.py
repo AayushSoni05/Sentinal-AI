@@ -21,6 +21,10 @@ from app.services.providers.registry import (
     get_screening_provider
 )
 
+from app.services.providers.unsc.config import (
+    get_review_threshold
+)
+
 # ============================================================
 # GET SCREENING RESULTS
 # ============================================================
@@ -292,13 +296,8 @@ def execute_screening_task(
         adverse_media_published_date=provider_result.get(
             "adverse_media_published_date"
         ),
-        source_uid=(
-            provider_result["evidence"].get("uid")
-            if isinstance(
-                provider_result.get("evidence"),
-                dict
-            )
-            else None
+        source_uid=provider_result.get(
+            "source_uid"
         ),
         country_match=provider_result.get(
             "country_match"
@@ -317,30 +316,59 @@ def execute_screening_task(
     if error:
         return None, error
 
+    # ========================================================
+    # BUSINESS RECOMMENDATION
+    # SANCTIONS ONLY
+    # ========================================================
+
+    recommendation = None
+    review_threshold = None
+
+    if screening_result.screening_type == "SANCTIONS":
+
+        score = float(
+            screening_result.match_confidence or 0
+        )
+
+        review_threshold = get_review_threshold()
+
+        if score >= 100:
+            recommendation = "BLOCK"
+
+        elif score >= review_threshold:
+            recommendation = "REVIEW"
+
+        else:
+            recommendation = "CLEAR"
+
+    # ========================================================
+    # RETURN RESULT
+    # ========================================================
+
     return {
-    "id": screening_result.id,
-    "kyc_profile_id": screening_result.kyc_profile_id,
-    "subject_type": screening_result.subject_type,
-    "subject_id": screening_result.subject_id,
-    "relationship_role": screening_result.relationship_role,
-    "screening_type": screening_result.screening_type,
-    "provider": screening_result.provider,
-    "result": screening_result.result,
-    "matched_name": screening_result.matched_name,
-    "match_confidence": screening_result.match_confidence,
-    "evidence": screening_result.evidence,
-    "checked_at": screening_result.checked_at,
-    "source_uid": screening_result.source_uid,
-    "country_match": screening_result.country_match,
-    "identifier_match": screening_result.identifier_match,
-    "match_strength": screening_result.match_strength,
-    "evidence_strength": screening_result.evidence_strength,
-    "adverse_media_category": screening_result.adverse_media_category,
-    "adverse_media_headline": screening_result.adverse_media_headline,
-    "adverse_media_summary": screening_result.adverse_media_summary,
-    "adverse_media_source": screening_result.adverse_media_source,
-    "adverse_media_published_date": screening_result.adverse_media_published_date
-}, None
+        "id": screening_result.id,
+        "kyc_profile_id": screening_result.kyc_profile_id,
+        "subject_type": screening_result.subject_type,
+        "subject_id": screening_result.subject_id,
+        "relationship_role": screening_result.relationship_role,
+        "screening_type": screening_result.screening_type,
+        "provider": screening_result.provider,
+        "result": screening_result.result,
+        "matched_name": screening_result.matched_name,
+        "match_confidence": screening_result.match_confidence,
+        "evidence": screening_result.evidence,
+        "checked_at": screening_result.checked_at,
+        "source_uid": screening_result.source_uid,
+        "country_match": screening_result.country_match,
+        "identifier_match": screening_result.identifier_match,
+        "match_strength": screening_result.match_strength,
+        "evidence_strength": screening_result.evidence_strength,
+        "adverse_media_category": screening_result.adverse_media_category,
+        "adverse_media_headline": screening_result.adverse_media_headline,
+        "adverse_media_summary": screening_result.adverse_media_summary,
+        "adverse_media_source": screening_result.adverse_media_source,
+        "adverse_media_published_date": screening_result.adverse_media_published_date
+    }, None
 
 # ============================================================
 # EXECUTE SCREENING PLAN
@@ -360,24 +388,388 @@ def execute_screening_plan(
 
     for screening_task in screening_plan:
 
-        result, error = execute_screening_task(
-            db=db,
-            screening_task=screening_task,
-            kyc_profile_id=kyc_profile_id
-        )
+        screening_type = screening_task["screening_type"]
 
-        if error:
-            errors.append({
-                "screening_type":
-                    screening_task["screening_type"],
-                "subject_id":
-                    screening_task["subject_id"],
-                "error": error
-            })
+        # ----------------------------------------------------
+        # SANCTIONS
+        # Sprint 4.2 currently uses UNSC.
+        # OFAC remains available for Sprint 4.3.
+        # ----------------------------------------------------
+
+        if screening_type == "SANCTIONS":
+
+            sanctions_providers = [
+                "UNSC"
+            ]
+
+            for provider_name in sanctions_providers:
+
+                provider = get_screening_provider(
+                    provider_name
+                )
+
+                try:
+
+                    provider_result = provider.screen(
+                        name=screening_task["name"],
+                        screening_type=screening_type,
+                        subject_type=screening_task[
+                            "subject_type"
+                        ],
+                        subject_id=screening_task[
+                            "subject_id"
+                        ],
+                        relationship_role=screening_task[
+                            "relationship_role"
+                        ],
+                        subject_country=screening_task.get(
+                            "subject_country"
+                        ),
+                        subject_identifiers=screening_task.get(
+                            "subject_identifiers"
+                        )
+                    )
+
+                    evidence = provider_result.get(
+                        "evidence"
+                    )
+
+                    if isinstance(evidence, dict):
+
+                        evidence = json.dumps(
+                            evidence,
+                            ensure_ascii=False
+                        )
+
+                    screening_result, error = (
+                        save_screening_result(
+                            db=db,
+                            kyc_profile_id=kyc_profile_id,
+                            subject_type=provider_result[
+                                "subject_type"
+                            ],
+                            subject_id=provider_result[
+                                "subject_id"
+                            ],
+                            relationship_role=provider_result[
+                                "relationship_role"
+                            ],
+                            screening_type=provider_result[
+                                "screening_type"
+                            ],
+                            provider=provider_result[
+                                "provider"
+                            ],
+                            result=provider_result[
+                                "result"
+                            ],
+                            matched_name=provider_result[
+                                "matched_name"
+                            ],
+                            match_confidence=provider_result[
+                                "match_confidence"
+                            ],
+                            evidence=evidence,
+                            source_uid=provider_result.get(
+                                "source_uid"
+                            ),
+                            country_match=provider_result.get(
+                                "country_match"
+                            ),
+                            identifier_match=provider_result.get(
+                                "identifier_match"
+                            ),
+                            match_strength=provider_result.get(
+                                "match_strength"
+                            ),
+                            evidence_strength=provider_result.get(
+                                "evidence_strength"
+                            )
+                        )
+                    )
+
+                    if error:
+
+                        errors.append({
+                            "screening_type":
+                                screening_type,
+
+                            "provider":
+                                provider_name,
+
+                            "subject_id":
+                                screening_task[
+                                    "subject_id"
+                                ],
+
+                            "error":
+                                error
+                        })
+
+                        continue
+
+                    score = float(
+                        screening_result.match_confidence or 0
+                    )
+
+                    review_threshold = get_review_threshold()
+
+                    if score >= 100:
+                        recommendation = "BLOCK"
+
+                    elif score >= review_threshold:
+                        recommendation = "REVIEW"
+
+                    else:
+                        recommendation = "CLEAR"
+
+                    results.append({
+                        "id":
+                            screening_result.id,
+
+                        "subject_type":
+                            screening_result.subject_type,
+
+                        "subject_id":
+                            screening_result.subject_id,
+
+                        "name":
+                            screening_task["name"],
+
+                        "relationship_role":
+                            screening_result.relationship_role,
+
+                        "screening_type":
+                            screening_result.screening_type,
+
+                        "provider":
+                            screening_result.provider,
+
+                        "result":
+                            screening_result.result,
+
+                        "matched_name":
+                            screening_result.matched_name,
+
+                        "match_confidence":
+                            screening_result.match_confidence,
+
+                        "recommendation": recommendation,
+                        "review_threshold": review_threshold,
+
+                        "source_uid":
+                            screening_result.source_uid,
+
+                        "country_match":
+                            screening_result.country_match,
+
+                        "identifier_match":
+                            screening_result.identifier_match,
+
+                        "match_strength":
+                            screening_result.match_strength,
+
+                        "evidence_strength":
+                            screening_result.evidence_strength,
+
+                        "evidence":
+                            screening_result.evidence,
+
+                        "checked_at":
+                            screening_result.checked_at
+                    })
+
+                except Exception as exc:
+
+                    errors.append({
+                        "screening_type":
+                            screening_type,
+
+                        "provider":
+                            provider_name,
+
+                        "subject_id":
+                            screening_task[
+                                "subject_id"
+                            ],
+
+                        "error":
+                            str(exc)
+                    })
 
             continue
 
-        results.append(result)
+        # ----------------------------------------------------
+        # NON-SANCTIONS SCREENING
+        # Existing behaviour remains unchanged.
+        # ----------------------------------------------------
+
+        try:
+
+            provider = get_screening_provider(
+                screening_type
+            )
+
+            provider_result = provider.screen(
+                name=screening_task["name"],
+                screening_type=screening_type,
+                subject_type=screening_task[
+                    "subject_type"
+                ],
+                subject_id=screening_task[
+                    "subject_id"
+                ],
+                relationship_role=screening_task[
+                    "relationship_role"
+                ],
+                subject_country=screening_task.get(
+                    "subject_country"
+                ),
+                subject_identifiers=screening_task.get(
+                    "subject_identifiers"
+                )
+            )
+
+            evidence = provider_result.get(
+                "evidence"
+            )
+
+            if isinstance(evidence, dict):
+
+                evidence = json.dumps(
+                    evidence,
+                    ensure_ascii=False
+                )
+
+            screening_result, error = save_screening_result(
+                db=db,
+                kyc_profile_id=kyc_profile_id,
+                subject_type=provider_result[
+                    "subject_type"
+                ],
+                subject_id=provider_result[
+                    "subject_id"
+                ],
+                relationship_role=provider_result[
+                    "relationship_role"
+                ],
+                screening_type=provider_result[
+                    "screening_type"
+                ],
+                provider=provider_result[
+                    "provider"
+                ],
+                result=provider_result[
+                    "result"
+                ],
+                matched_name=provider_result[
+                    "matched_name"
+                ],
+                match_confidence=provider_result[
+                    "match_confidence"
+                ],
+                evidence=evidence,
+                source_uid=provider_result.get(
+                    "source_uid"
+                ),
+                country_match=provider_result.get(
+                    "country_match"
+                ),
+                identifier_match=provider_result.get(
+                    "identifier_match"
+                ),
+                match_strength=provider_result.get(
+                    "match_strength"
+                ),
+                evidence_strength=provider_result.get(
+                    "evidence_strength"
+                )
+            )
+
+            if error:
+
+                errors.append({
+                    "screening_type":
+                        screening_type,
+
+                    "subject_id":
+                        screening_task[
+                            "subject_id"
+                        ],
+
+                    "error":
+                        error
+                })
+
+                continue
+
+            results.append({
+                "id":
+                    screening_result.id,
+
+                "subject_type":
+                    screening_result.subject_type,
+
+                "subject_id":
+                    screening_result.subject_id,
+
+                "name":
+                    screening_task["name"],
+
+                "relationship_role":
+                    screening_result.relationship_role,
+
+                "screening_type":
+                    screening_result.screening_type,
+
+                "provider":
+                    screening_result.provider,
+
+                "result":
+                    screening_result.result,
+
+                "matched_name":
+                    screening_result.matched_name,
+
+                "match_confidence":
+                    screening_result.match_confidence,
+
+                "source_uid":
+                    screening_result.source_uid,
+
+                "country_match":
+                    screening_result.country_match,
+
+                "identifier_match":
+                    screening_result.identifier_match,
+
+                "match_strength":
+                    screening_result.match_strength,
+
+                "evidence_strength":
+                    screening_result.evidence_strength,
+
+                "evidence":
+                    screening_result.evidence,
+
+                "checked_at":
+                    screening_result.checked_at
+            })
+
+        except Exception as exc:
+
+            errors.append({
+                "screening_type":
+                    screening_type,
+
+                "subject_id":
+                    screening_task[
+                        "subject_id"
+                    ],
+
+                "error":
+                    str(exc)
+            })
 
     return {
         "total_tasks": len(screening_plan),
