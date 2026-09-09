@@ -377,11 +377,10 @@ def get_investigation_screening_results(
     )
 
     return {
+        "investigation_number":
+            investigation.investigation_number,
         "customer_number":
             customer.customer_number,
-        "customer_id":
-            investigation.customer_id,
-
         "company_name":
             investigation.company_name,
 
