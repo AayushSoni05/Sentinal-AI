@@ -25,6 +25,10 @@ from app.services.providers.unsc.config import (
     get_review_threshold
 )
 
+from app.services.providers.sanctions_registry import (
+    SANCTIONS_SOURCE_REGISTRY
+)
+
 # ============================================================
 # GET SCREENING RESULTS
 # ============================================================
@@ -398,9 +402,7 @@ def execute_screening_plan(
 
         if screening_type == "SANCTIONS":
 
-            sanctions_providers = [
-                "UNSC"
-            ]
+            sanctions_providers = SANCTIONS_SOURCE_REGISTRY
 
             for provider_name in sanctions_providers:
 
@@ -771,12 +773,148 @@ def execute_screening_plan(
                     str(exc)
             })
 
+    sanctions_assessment = build_sanctions_assessment(
+            results
+        )
+
     return {
         "total_tasks": len(screening_plan),
         "successful_tasks": len(results),
         "failed_tasks": len(errors),
         "results": results,
         "errors": errors
+    }
+
+# ============================================================
+# BUILD MULTI-SOURCE SANCTIONS ASSESSMENT
+# ============================================================
+
+def build_sanctions_assessment(
+    screening_results
+):
+    """
+    Aggregate sanctions results by subject.
+
+    Source results remain independent.
+    Overall score is the highest source score.
+    No averaging is performed.
+
+    Rules:
+        Any source score >= 100 -> BLOCK
+        Otherwise score >= review threshold -> REVIEW
+        Otherwise -> CLEAR
+    """
+
+    review_threshold = get_review_threshold()
+
+    subject_groups = {}
+
+    for result in screening_results:
+
+        if result["screening_type"] != "SANCTIONS":
+            continue
+
+        subject_key = (
+            result["subject_type"],
+            result["subject_id"],
+            result["relationship_role"]
+        )
+
+        if subject_key not in subject_groups:
+            subject_groups[subject_key] = {
+                "subject_type": result["subject_type"],
+                "subject_id": result["subject_id"],
+                "relationship_role": result["relationship_role"],
+                "sources": []
+            }
+
+        try:
+            score = float(
+                result.get("match_confidence") or 0
+            )
+        except (TypeError, ValueError):
+            score = 0.0
+
+        matched = result.get("result") in {
+            "MATCH",
+            "POSSIBLE_MATCH",
+            "CONFIRMED_MATCH"
+        }
+
+        subject_groups[subject_key]["sources"].append({
+            "source": result.get("provider"),
+            "match": matched,
+            "result": result.get("result"),
+            "score": score,
+            "matched_name": result.get("matched_name"),
+            "source_uid": result.get("source_uid"),
+            "country_match": result.get("country_match"),
+            "identifier_match": result.get("identifier_match"),
+            "match_strength": result.get("match_strength"),
+            "evidence_strength": result.get("evidence_strength"),
+            "evidence": result.get("evidence"),
+            "checked_at": result.get("checked_at")
+        })
+
+    subjects = []
+
+    for subject in subject_groups.values():
+
+        source_scores = [
+            source["score"]
+            for source in subject["sources"]
+        ]
+
+        overall_score = (
+            max(source_scores)
+            if source_scores
+            else 0.0
+        )
+
+        if overall_score >= 100:
+            recommendation = "BLOCK"
+
+        elif overall_score >= review_threshold:
+            recommendation = "REVIEW"
+
+        else:
+            recommendation = "CLEAR"
+
+        subjects.append({
+            "subject_type": subject["subject_type"],
+            "subject_id": subject["subject_id"],
+            "relationship_role": subject["relationship_role"],
+            "sources": subject["sources"],
+            "overall_score": overall_score,
+            "recommendation": recommendation,
+            "review_threshold": review_threshold
+        })
+
+    subject_scores = [
+        subject["overall_score"]
+        for subject in subjects
+    ]
+
+    investigation_score = (
+        max(subject_scores)
+        if subject_scores
+        else 0.0
+    )
+
+    if investigation_score >= 100:
+        investigation_recommendation = "BLOCK"
+
+    elif investigation_score >= review_threshold:
+        investigation_recommendation = "REVIEW"
+
+    else:
+        investigation_recommendation = "CLEAR"
+
+    return {
+        "subjects": subjects,
+        "overall_score": investigation_score,
+        "recommendation": investigation_recommendation,
+        "review_threshold": review_threshold
     }
 
 # ============================================================

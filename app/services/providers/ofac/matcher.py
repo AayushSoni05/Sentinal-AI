@@ -8,6 +8,10 @@ from app.services.providers.ofac.normalizer import (
     normalize_name
 )
 
+from app.services.providers.unsc.config import (
+    get_review_threshold
+)
+
 
 def calculate_name_similarity(
     subject_name: str,
@@ -310,17 +314,17 @@ def determine_sanctions_status(
     name_score: float,
     identifier_match: bool | None
 ):
-    if (
-        evidence_strength == "CONFIRMED"
-        and name_score >= 0.95
-        and identifier_match is True
-    ):
-        return "CONFIRMED_MATCH"
+    review_threshold = get_review_threshold()
 
-    if evidence_strength in {
-        "STRONG",
-        "MODERATE"
-    }:
-        return "POSSIBLE_MATCH"
+    if identifier_match is True:
+        return "MATCH"
+
+    score_percent = name_score * 100.0
+
+    if score_percent >= 100.0:
+        return "MATCH"
+
+    if score_percent >= review_threshold:
+        return "MATCH"
 
     return "NO_MATCH"

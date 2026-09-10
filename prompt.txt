@@ -1,0 +1,318 @@
+I am building a FastAPI + SQLAlchemy + SQLite due-diligence platform called Sentinel AI.
+
+PROJECT PURPOSE
+Sentinel AI is a KYC/AML/due-diligence platform intended for banks and trade-finance firms. It manages Customers, Persons, Legal Entities, Investigations, Entity Relationships, KYC profiles, sanctions screening, PEP screening, adverse-media screening, risk assessment, and investigation decisions.
+
+IMPORTANT WORKING STYLE
+I am not a highly technical person, so guide me step-by-step.
+Do not assume files, functions, endpoints, schemas, or architecture that I have not shown you.
+Before asking me to modify code, inspect the code I provide and work from the actual implementation.
+Give me ONE implementation step at a time.
+After each step, wait for me to say DONE or provide the resulting output.
+Do not make multiple unrelated changes in one step.
+Do not delete existing code/files unless we have verified that they are unnecessary.
+Use PowerShell commands because I work on Windows.
+I commit and push my code to GitHub regularly, but development/testing is local-first.
+Do not require GitHub verification after every step unless necessary.
+
+CURRENT IDENTIFIER DESIGN
+The public/business-facing identifiers are:
+
+Customer:
+CUS-YYYYMMDD-NNNNNN
+
+Person:
+PE-YYYYMMDD-NNNNNN
+
+Legal Entity:
+LE-YYYYMMDD-NNNNNN
+
+Investigation:
+INV-YYYYMMDD-NNNNNN
+
+Internal UUIDs are still used internally as database primary keys and foreign keys.
+
+IMPORTANT API RULE
+Customer-facing APIs should expose CUS-... rather than internal Customer UUIDs.
+Person-facing APIs should use PE-... rather than internal Person UUIDs.
+LegalEntity-facing APIs should use LE-... rather than internal LegalEntity UUIDs.
+Investigation-facing APIs should use INV-....
+
+Internal UUIDs may remain inside the database and internal service logic where required.
+
+CURRENT ARCHITECTURE
+Customer:
+- A Customer can be Individual or Company.
+- Individual Customer is linked internally to a Person.
+- Company Customer is linked internally to a LegalEntity.
+- Individual Customers cannot access the company relationship endpoint.
+
+Standalone entities:
+- Person can be created independently through POST /persons.
+- LegalEntity can be created independently through POST /legal-entities.
+- A related Person or LegalEntity does NOT need to be a Customer.
+- This is important: do not create Customers merely to represent related parties.
+
+ENTITY RELATIONSHIPS
+Company relationship endpoint:
+
+POST /customers/{customer_number}/relationships
+
+The source can be:
+- Person via from_person_number = PE-...
+- LegalEntity via from_legal_entity_number = LE-...
+
+The target is the Company's internally linked LegalEntity, resolved from the CUS-... customer number.
+
+Internally relationships store UUID foreign keys:
+- from_person_id
+- from_legal_entity_id
+- to_legal_entity_id
+
+But API responses should use:
+- from_person_number
+- from_legal_entity_number
+- to_customer_number
+
+Current supported relationship types include:
+- OWNS
+- CONTROLS
+- DIRECTOR_OF
+- AUTHORIZED_PERSON_OF
+- AUTHORIZED_SIGNATORY_OF
+- SHAREHOLDER_OF
+- UBO_OF
+
+Duplicate identical relationships should be rejected.
+
+GET:
+GET /customers/{customer_number}/relationships
+
+This returns the company's relationships using business-facing identifiers.
+
+SCREENING
+All screening is investigation-based.
+
+The main screening endpoint is:
+
+POST /investigations/{investigation_number}/screening
+
+Screening results are retrieved using:
+
+GET /investigations/{investigation_number}/screening-results
+
+There is also investigation review/decision functionality.
+
+For a Company investigation, screening must include:
+1. The company/legal entity itself
+2. Relationship parties configured for the company
+
+Relationship roles include:
+- UBO
+- Director
+- Shareholder
+- Controller
+- Authorized Person
+- Authorized Signatory
+
+For an Individual Customer:
+- Screen the individual itself.
+
+For a Company:
+- Screen the company itself separately
+- Screen each relevant relationship party separately
+
+Screening results should preserve:
+- subject_type
+- internal subject_id
+- public subject_number (PE-... or LE-...)
+- relationship_role
+- screening_type
+- provider/source
+- result
+- match confidence
+- source UID
+- country match
+- identifier match
+- match strength
+- evidence strength
+- evidence
+- adverse media fields where applicable
+
+Current screening types:
+- SANCTIONS
+- PEP
+- ADVERSE_MEDIA
+
+Current system already has a working OFAC provider.
+
+CURRENT SCREENING BEHAVIOR
+The company screening subject builder includes the LegalEntity itself as:
+relationship_role = "Customer"
+
+Then it adds related parties according to relationship type.
+
+The screening system already successfully screened:
+- Company/legal entity itself
+- LegalEntity shareholder
+- Person UBO
+
+and returned separate screening tasks/results.
+
+CURRENT TESTING RULE
+Do NOT use fake sanctioned identities merely to force a MATCH.
+
+For Sprint 4 testing:
+- Use real records from official sanctions lists.
+- We can create legitimate local test customers/persons/legal entities, but the identity used to test a sanctions MATCH must correspond to an actual official listed party.
+- We will test both Individual and Company customers.
+- Company testing must include the company itself and relationship parties.
+
+SPRINT 4 — MULTI-SOURCE SANCTIONS SCREENING
+We are now starting Phase 3 Sprint 4.
+
+The purpose of Sprint 4 is to move from the existing OFAC-only sanctions capability to a multi-source sanctions screening engine.
+
+The final source set should be treated as:
+
+CORE / INTERNATIONAL:
+1. UN Security Council Consolidated List
+   Official:
+   https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list
+
+MAJOR JURISDICTION:
+2. OFAC SDN List
+   Official:
+   https://ofac.treasury.gov/sanctions-list-service
+
+3. OFAC Consolidated Non-SDN Lists
+   Official:
+   https://ofac.treasury.gov/sanctions-list-service
+
+4. UK Sanctions List (UKSL)
+   Official:
+   https://www.gov.uk/government/publications/the-uk-sanctions-list
+
+5. EU Consolidated Financial Sanctions List
+   Official:
+   https://finance.ec.europa.eu/eu-and-world/sanctions-restrictive-measures/overview-sanctions-and-related-resources_en
+
+INDIA-SPECIFIC:
+6. India Ministry of Home Affairs / UAPA designated lists
+   Official:
+   https://www.mha.gov.in/en/divisionofmha/counter-terrorism-and-counter-radicalization-division
+
+Do NOT attempt to implement every country's national sanctions list at this stage.
+
+Architecture should be extensible so additional country-specific sources can be plugged in later without redesigning the screening engine.
+
+Do NOT treat FATF grey/black lists as sanctions lists. They represent jurisdictional AML/CFT risk and should remain conceptually separate from sanctions screening.
+
+SOURCE-BY-SOURCE SCREENING REQUIREMENT
+Every source must produce its own result.
+
+Example:
+
+Subject
+├── UN → MATCH
+├── OFAC_SDN → NO_MATCH
+├── OFAC_NON_SDN → NO_MATCH
+├── UK → MATCH
+├── EU → NO_MATCH
+└── INDIA_MHA → NO_MATCH
+
+Do not overwrite results from one source with another source.
+Preserve source provenance.
+
+The architecture should ideally move toward something like:
+
+SanctionsSource
+    ↓
+download
+    ↓
+parse
+    ↓
+normalize
+    ↓
+match
+    ↓
+ScreeningResult
+
+Each source provider should implement a common interface/contract.
+
+SCORING REQUIREMENT
+The existing risk/recommendation engine should aggregate the source results.
+
+User requirement:
+
+If the final calculated score reaches 100:
+→ RECOMMEND BLOCK
+
+Sentinel recommends the decision; it should not automatically modify customer status just because the score is 100.
+
+Do not assume that every weak match immediately equals score 100.
+The existing matching/evidence/scoring logic should determine the final score.
+
+TESTING REQUIREMENT FOR SPRINT 4
+Test cases must include:
+
+1. Individual clean person
+   All sanctions sources → NO_MATCH
+
+2. Individual real sanctioned person
+   Example:
+   Source 1 → MATCH
+   Source 2 → NO_MATCH
+   Source 3 → MATCH
+   etc.
+   Then verify scoring.
+
+3. Company clean company
+   Company itself → source-by-source screening
+   Relationship parties → source-by-source screening
+
+4. Company with real sanctioned relationship party
+   Example:
+   Company → NO_MATCH
+   UBO → MATCH on one or more sources
+   Director → NO_MATCH
+   Shareholder → NO_MATCH
+   etc.
+
+5. Verify:
+   source-specific results are preserved
+   subject identity is preserved
+   relationship role is preserved
+   evidence is preserved
+   final score is calculated
+   score = 100 → recommendation = BLOCK
+
+IMPORTANT
+Do not start implementing source providers immediately.
+
+First inspect the current repository and identify:
+- existing OFAC provider architecture
+- downloaders
+- parsers
+- normalizers
+- matchers
+- screening service/provider interface
+- screening result persistence
+- current investigation screening execution flow
+- current risk scoring/recommendation flow
+
+Then propose the smallest safe architectural extension that can support:
+UN
+OFAC SDN
+OFAC Non-SDN
+UK
+EU
+India MHA/UAPA
+uae 
+aus
+ 
+ 
+Work one step at a time. 
+ 
+The immediate objective is: 
+Understand the existing provider architecture → design a common sanctions-source interface → implement sources one at a time → use real official data for testing → test Individual and Company workflows → aggregate source results → score 100 means RECOMMEND BLOCK.

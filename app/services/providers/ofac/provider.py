@@ -72,6 +72,11 @@ class OFACSanctionsProvider:
             "match_confidence":
                 match["match_confidence"],
             "evidence": matched_record,
+            "source_uid": (
+                matched_record.get("uid")
+                if matched_record
+                else None
+            ),
             "subject_type": subject_type,
             "subject_id": subject_id,
             "relationship_role": relationship_role,

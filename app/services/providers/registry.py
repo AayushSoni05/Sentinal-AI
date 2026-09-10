@@ -30,14 +30,14 @@ SCREENING_PROVIDER_REGISTRY = {
 # ============================================================
 
 def get_screening_provider(
-    screening_type: str
+    provider_name: str
 ):
     provider_class = SCREENING_PROVIDER_REGISTRY.get(
-        screening_type
+        provider_name
     )
     if provider_class is None:
         raise ValueError(
             f"No screening provider configured for "
-            f"{screening_type}"
+            f"{provider_name}"
         )
     return provider_class()
