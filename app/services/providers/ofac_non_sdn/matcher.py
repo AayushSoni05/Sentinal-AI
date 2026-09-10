@@ -1,10 +1,10 @@
 # ============================================================
-# OFAC ENTITY MATCHER
+# OFAC CONSOLIDATED NON-SDN MATCHER
 # ============================================================
 
 from difflib import SequenceMatcher
 
-from app.services.providers.ofac.normalizer import (
+from app.services.providers.ofac_non_sdn.normalizer import (
     normalize_name
 )
 
@@ -17,8 +17,13 @@ def calculate_name_similarity(
     subject_name: str,
     sanctions_name: str
 ):
-    subject = normalize_name(subject_name)
-    candidate = normalize_name(sanctions_name)
+    subject = normalize_name(
+        subject_name
+    )
+
+    candidate = normalize_name(
+        sanctions_name
+    )
 
     if not subject or not candidate:
         return 0.0
@@ -29,6 +34,7 @@ def calculate_name_similarity(
         candidate
     ).ratio()
 
+
 def country_matches(
     subject_country: str | None,
     record: dict
@@ -36,7 +42,11 @@ def country_matches(
     if not subject_country:
         return None
 
-    subject = subject_country.strip().upper()
+    subject = (
+        subject_country
+        .strip()
+        .upper()
+    )
 
     countries = set()
 
@@ -44,7 +54,9 @@ def country_matches(
         "addresses",
         []
     ):
-        country = address.get("country")
+        country = address.get(
+            "country"
+        )
 
         if country:
             countries.add(
@@ -56,9 +68,6 @@ def country_matches(
 
     return subject in countries
 
-# ============================================================
-# CHECK IDENTIFIER MATCH
-# ============================================================
 
 def identifier_matches(
     subject_identifiers: dict | None,
@@ -110,9 +119,6 @@ def identifier_matches(
 
     return False
 
-# ============================================================
-# ASSESS MATCH STRENGTH
-# ============================================================
 
 def assess_match_strength(
     name_score: float,
@@ -137,144 +143,6 @@ def assess_match_strength(
 
     return "WEAK"
 
-# ============================================================
-# DETERMINE MATCH RESULT
-# ============================================================
-
-def match_subject_against_sdn(
-    subject_name: str,
-    sdn_records: list[dict],
-    possible_match_threshold: float = 0.85,
-    subject_country: str | None = None,
-    subject_identifiers: dict | None = None
-):
-    normalized_subject = normalize_name(
-        subject_name
-    )
-
-    if not normalized_subject:
-        return {
-            "result": "NO_MATCH",
-            "match_confidence": 0.0,
-            "matched_record": None,
-            "country_match": None,
-            "match_strength": "WEAK",
-            "identifier_match": None,
-            "evidence_strength": "WEAK"
-        }
-
-    best_match = None
-    best_score = 0.0
-
-    for record in sdn_records:
-
-        candidate_names = [
-            record.get(
-                "normalized_name",
-                ""
-            )
-        ]
-
-        candidate_names.extend(
-            record.get(
-                "normalized_aliases",
-                []
-            )
-        )
-
-        for candidate_name in candidate_names:
-
-            score = calculate_name_similarity(
-                normalized_subject,
-                candidate_name
-            )
-
-            if score > best_score:
-                best_score = score
-                best_match = record
-
-    # --------------------------------------------------------
-    # KEEP A CANDIDATE ONLY IF IT REACHES THE MATCH THRESHOLD
-    # --------------------------------------------------------
-
-    review_threshold = get_review_threshold()
-
-    if best_score * 100.0 >= review_threshold:
-        matched_record = best_match
-    else:
-        matched_record = None
-
-    # --------------------------------------------------------
-    # COUNTRY EVIDENCE
-    # --------------------------------------------------------
-
-    matched_country = (
-        country_matches(
-            subject_country,
-            matched_record
-        )
-        if matched_record
-        else None
-    )
-
-    # --------------------------------------------------------
-    # NAME MATCH STRENGTH
-    # --------------------------------------------------------
-
-    match_strength = assess_match_strength(
-        name_score=best_score,
-        country_match=matched_country
-    )
-
-    # --------------------------------------------------------
-    # IDENTIFIER EVIDENCE
-    # --------------------------------------------------------
-
-    identifier_match = (
-        identifier_matches(
-            subject_identifiers,
-            matched_record
-        )
-        if matched_record
-        else None
-    )
-
-    # --------------------------------------------------------
-    # CORROBORATING EVIDENCE
-    # --------------------------------------------------------
-
-    evidence_strength = assess_corroborating_evidence(
-        name_score=best_score,
-        country_match=matched_country,
-        identifier_match=identifier_match
-    )
-
-    # --------------------------------------------------------
-    # FINAL SANCTIONS STATUS
-    # --------------------------------------------------------
-
-    result = determine_sanctions_status(
-        evidence_strength=evidence_strength,
-        name_score=best_score,
-        identifier_match=identifier_match
-    )
-
-    return {
-        "result": result,
-        "match_confidence": round(
-            best_score * 100,
-            2
-        ),
-        "matched_record": matched_record,
-        "country_match": matched_country,
-        "match_strength": match_strength,
-        "identifier_match": identifier_match,
-        "evidence_strength": evidence_strength
-    }
-
-# ============================================================
-# ASSESS CORROBORATING EVIDENCE
-# ============================================================
 
 def assess_corroborating_evidence(
     name_score: float,
@@ -307,9 +175,6 @@ def assess_corroborating_evidence(
 
     return "WEAK"
 
-# ============================================================
-# DETERMINE SANCTIONS SCREENING STATUS
-# ============================================================
 
 def determine_sanctions_status(
     evidence_strength: str,
@@ -321,15 +186,124 @@ def determine_sanctions_status(
     if identifier_match is True:
         return "MATCH"
 
-    score_percent = name_score * 100.0
+    score_percent = (
+        name_score * 100.0
+    )
 
     if score_percent >= 100.0:
         return "MATCH"
 
-    if score_percent >= 85.0:
+    if score_percent >= review_threshold:
         return "MATCH"
 
-    if score_percent >= review_threshold:
-        return "POSSIBLE_MATCH"
-
     return "NO_MATCH"
+
+
+def match_subject_against_non_sdn(
+    subject_name: str,
+    non_sdn_records: list[dict],
+    subject_country: str | None = None,
+    subject_identifiers: dict | None = None
+):
+    normalized_subject = normalize_name(
+        subject_name
+    )
+
+    if not normalized_subject:
+        return {
+            "result": "NO_MATCH",
+            "match_confidence": 0.0,
+            "matched_record": None,
+            "country_match": None,
+            "match_strength": "WEAK",
+            "identifier_match": None,
+            "evidence_strength": "WEAK"
+        }
+
+    best_match = None
+    best_score = 0.0
+
+    for record in non_sdn_records:
+
+        candidate_names = [
+            record.get(
+                "normalized_name",
+                ""
+            )
+        ]
+
+        candidate_names.extend(
+            record.get(
+                "normalized_aliases",
+                []
+            )
+        )
+
+        for candidate_name in candidate_names:
+
+            score = calculate_name_similarity(
+                normalized_subject,
+                candidate_name
+            )
+
+            if score > best_score:
+                best_score = score
+                best_match = record
+
+    review_threshold = get_review_threshold()
+
+    matched_record = (
+        best_match
+        if best_score * 100.0 >= review_threshold
+        else None
+    )
+
+    matched_country = (
+        country_matches(
+            subject_country,
+            matched_record
+        )
+        if matched_record
+        else None
+    )
+
+    identifier_match = (
+        identifier_matches(
+            subject_identifiers,
+            matched_record
+        )
+        if matched_record
+        else None
+    )
+
+    match_strength = assess_match_strength(
+        name_score=best_score,
+        country_match=matched_country
+    )
+
+    evidence_strength = (
+        assess_corroborating_evidence(
+            name_score=best_score,
+            country_match=matched_country,
+            identifier_match=identifier_match
+        )
+    )
+
+    result = determine_sanctions_status(
+        evidence_strength=evidence_strength,
+        name_score=best_score,
+        identifier_match=identifier_match
+    )
+
+    return {
+        "result": result,
+        "match_confidence": round(
+            best_score * 100.0,
+            2
+        ),
+        "matched_record": matched_record,
+        "country_match": matched_country,
+        "match_strength": match_strength,
+        "identifier_match": identifier_match,
+        "evidence_strength": evidence_strength
+    }

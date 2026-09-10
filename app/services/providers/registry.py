@@ -11,7 +11,9 @@ from app.services.providers.ofac.provider import (
 from app.services.providers.unsc.provider import (
     UNSCSanctionsProvider
 )
-
+from app.services.providers.ofac_non_sdn.provider import (
+    OFACNonSDNSanctionsProvider
+)
 
 # ============================================================
 # PROVIDER REGISTRY
@@ -20,6 +22,7 @@ from app.services.providers.unsc.provider import (
 SCREENING_PROVIDER_REGISTRY = {
     "UNSC": UNSCSanctionsProvider,
     "OFAC": OFACSanctionsProvider,
+    "OFAC_NON_SDN": OFACNonSDNSanctionsProvider,
     "PEP": MockScreeningProvider,
     "ADVERSE_MEDIA": MockScreeningProvider
 }
