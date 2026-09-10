@@ -889,7 +889,8 @@ def get_latest_screening_results(
             result.subject_type,
             result.subject_id,
             result.relationship_role,
-            result.screening_type
+            result.screening_type,
+            result.provider
         )
 
         if key not in latest_results:

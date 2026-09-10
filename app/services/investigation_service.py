@@ -232,36 +232,24 @@ def execute_investigation_screening(
     db.commit()
 
     return {
-        "investigation_number":
-            investigation.investigation_number,
+    "investigation_number":
+        investigation.investigation_number,
 
-        "investigation_id":
-            investigation.id,
+    "customer_number":
+        customer.customer_number,
 
-        "customer_id":
-            customer.id,
+    "screening":
+        screening_result["sanctions_assessment"]["screening"],
 
-        "customer_type":
-            customer.customer_type,
+    "overall_score":
+        screening_result["sanctions_assessment"]["overall_score"],
 
-        "kyc_profile_id":
-            kyc_profile.id,
+    "recommendation":
+        screening_result["sanctions_assessment"]["recommendation"],
 
-        "total_tasks":
-            screening_result["total_tasks"],
-
-        "successful_tasks":
-            screening_result["successful_tasks"],
-
-        "failed_tasks":
-            screening_result["failed_tasks"],
-
-        "results":
-            screening_result["results"],
-
-        "errors":
-            screening_result["errors"]
-    }, None
+    "errors":
+        screening_result["errors"]
+}, None
 
 # ============================================================
 # GET INVESTIGATION MATCH REVIEW

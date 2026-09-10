@@ -295,7 +295,7 @@ def match_subject_against_unsc(
                 return {
                     "result": "MATCH",
                     "match_confidence": 100.0,
-                    "matched_record": record,
+                    "matched_record": None,
                     "country_match": None,
                     "identifier_match": True,
                     "match_strength": "EXACT_IDENTIFIER",
@@ -341,7 +341,10 @@ def match_subject_against_unsc(
 
             # Business confidence is zero because
             # there is no business-level match.
-            "match_confidence": 0.0,
+            "match_confidence": round(
+                best_score,
+                2
+            ),
 
             "matched_record": None,
 
@@ -427,7 +430,10 @@ def match_subject_against_unsc(
 
     return {
         "result": "NO_MATCH",
-        "match_confidence": 0.0,
+        "match_confidence": round(
+            best_score,
+            2
+        ),
         "matched_record": None,
         "country_match": None,
         "identifier_match": False,

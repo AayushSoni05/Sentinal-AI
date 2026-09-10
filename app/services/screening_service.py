@@ -170,34 +170,62 @@ def build_screening_plan(
 # CHECK SCREENING COMPLETENESS
 # ============================================================
 
+# ============================================================
+# CHECK SCREENING COMPLETENESS
+# ============================================================
+
 def check_screening_completeness(
     screening_plan,
     screening_results
 ):
-    expected_tasks = {
-        (
-            task["subject_type"],
-            task["subject_id"],
-            task["relationship_role"],
-            task["screening_type"]
-        )
-        for task in screening_plan
-    }
+    expected_tasks = set()
 
-    completed_tasks = {
-        (
-            result.subject_type,
-            result.subject_id,
-            result.relationship_role,
-            result.screening_type
+    for task in screening_plan:
+
+        if task["screening_type"] == "SANCTIONS":
+
+            for provider_name in SANCTIONS_SOURCE_REGISTRY:
+
+                expected_tasks.add((
+                    task["subject_type"],
+                    task["subject_id"],
+                    task["relationship_role"],
+                    task["screening_type"],
+                    provider_name
+                ))
+
+        else:
+
+            expected_tasks.add((
+                task["subject_type"],
+                task["subject_id"],
+                task["relationship_role"],
+                task["screening_type"],
+                None
+            ))
+
+    completed_tasks = set()
+
+    for result in screening_results:
+
+        provider = (
+            result.provider
+            if result.screening_type == "SANCTIONS"
+            else None
         )
-        for result in screening_results
+
         if (
             result.subject_type is not None
             and result.subject_id is not None
             and result.relationship_role is not None
-        )
-    }
+        ):
+            completed_tasks.add((
+                result.subject_type,
+                result.subject_id,
+                result.relationship_role,
+                result.screening_type,
+                provider
+            ))
 
     missing_tasks = expected_tasks - completed_tasks
 
@@ -210,7 +238,8 @@ def check_screening_completeness(
                 "subject_type": task[0],
                 "subject_id": task[1],
                 "relationship_role": task[2],
-                "screening_type": task[3]
+                "screening_type": task[3],
+                "provider": task[4]
             }
             for task in sorted(missing_tasks)
         ]
@@ -782,8 +811,12 @@ def execute_screening_plan(
         "successful_tasks": len(results),
         "failed_tasks": len(errors),
         "results": results,
-        "errors": errors
+        "errors": errors,
+        "sanctions_assessment": sanctions_assessment
     }
+# ============================================================
+# BUILD MULTI-SOURCE SANCTIONS ASSESSMENT
+# ============================================================
 
 # ============================================================
 # BUILD MULTI-SOURCE SANCTIONS ASSESSMENT
@@ -793,40 +826,31 @@ def build_sanctions_assessment(
     screening_results
 ):
     """
-    Aggregate sanctions results by subject.
+    Build one flat sanctions screening array.
 
-    Source results remain independent.
-    Overall score is the highest source score.
-    No averaging is performed.
+    Every provider/source produces its own screening entry.
+
+    Overall score:
+        Highest source score.
+
+    No averaging.
 
     Rules:
         Any source score >= 100 -> BLOCK
-        Otherwise score >= review threshold -> REVIEW
+        Otherwise highest score >= review threshold -> REVIEW
         Otherwise -> CLEAR
     """
 
     review_threshold = get_review_threshold()
 
-    subject_groups = {}
+    screening = []
+
+    scores = []
 
     for result in screening_results:
 
-        if result["screening_type"] != "SANCTIONS":
+        if result.get("screening_type") != "SANCTIONS":
             continue
-
-        subject_key = (
-            result["subject_type"],
-            result["subject_id"],
-            result["relationship_role"]
-        )
-
-        if subject_key not in subject_groups:
-            subject_groups[subject_key] = {
-                "subject_type": result["subject_type"],
-                "subject_id": result["subject_id"],
-                "relationship_role": result["relationship_role"],
-                "sources": []
-            }
 
         try:
             score = float(
@@ -835,88 +859,75 @@ def build_sanctions_assessment(
         except (TypeError, ValueError):
             score = 0.0
 
-        matched = result.get("result") in {
-            "MATCH",
-            "POSSIBLE_MATCH",
-            "CONFIRMED_MATCH"
-        }
+        scores.append(score)
 
-        subject_groups[subject_key]["sources"].append({
-            "source": result.get("provider"),
-            "match": matched,
-            "result": result.get("result"),
+        screening.append({
+            "subject_type": result.get(
+                "subject_type"
+            ),
+            "subject_id": result.get(
+                "subject_id"
+            ),
+            "name": result.get(
+                "name"
+            ),
+            "relationship_role": result.get(
+                "relationship_role"
+            ),
+            "provider": result.get(
+                "provider"
+            ),
+            "result": result.get(
+                "result"
+            ),
             "score": score,
-            "matched_name": result.get("matched_name"),
-            "source_uid": result.get("source_uid"),
-            "country_match": result.get("country_match"),
-            "identifier_match": result.get("identifier_match"),
-            "match_strength": result.get("match_strength"),
-            "evidence_strength": result.get("evidence_strength"),
-            "evidence": result.get("evidence"),
-            "checked_at": result.get("checked_at")
+            "matched_name": result.get(
+                "matched_name"
+            ),
+            "source_uid": result.get(
+                "source_uid"
+            ),
+            "country_match": result.get(
+                "country_match"
+            ),
+            "identifier_match": result.get(
+                "identifier_match"
+            ),
+            "match_strength": result.get(
+                "match_strength"
+            ),
+            "evidence_strength": result.get(
+                "evidence_strength"
+            ),
+            "evidence": result.get(
+                "evidence"
+            ),
+            "checked_at": result.get(
+                "checked_at"
+            )
         })
 
-    subjects = []
-
-    for subject in subject_groups.values():
-
-        source_scores = [
-            source["score"]
-            for source in subject["sources"]
-        ]
-
-        overall_score = (
-            max(source_scores)
-            if source_scores
-            else 0.0
-        )
-
-        if overall_score >= 100:
-            recommendation = "BLOCK"
-
-        elif overall_score >= review_threshold:
-            recommendation = "REVIEW"
-
-        else:
-            recommendation = "CLEAR"
-
-        subjects.append({
-            "subject_type": subject["subject_type"],
-            "subject_id": subject["subject_id"],
-            "relationship_role": subject["relationship_role"],
-            "sources": subject["sources"],
-            "overall_score": overall_score,
-            "recommendation": recommendation,
-            "review_threshold": review_threshold
-        })
-
-    subject_scores = [
-        subject["overall_score"]
-        for subject in subjects
-    ]
-
-    investigation_score = (
-        max(subject_scores)
-        if subject_scores
+    overall_score = (
+        max(scores)
+        if scores
         else 0.0
     )
 
-    if investigation_score >= 100:
-        investigation_recommendation = "BLOCK"
+    if overall_score >= 100:
+        recommendation = "BLOCK"
 
-    elif investigation_score >= review_threshold:
-        investigation_recommendation = "REVIEW"
+    elif overall_score >= review_threshold:
+        recommendation = "REVIEW"
 
     else:
-        investigation_recommendation = "CLEAR"
+        recommendation = "CLEAR"
 
     return {
-        "subjects": subjects,
-        "overall_score": investigation_score,
-        "recommendation": investigation_recommendation,
+        "screening": screening,
+        "overall_score": overall_score,
+        "recommendation": recommendation,
         "review_threshold": review_threshold
     }
-
 # ============================================================
 # BUILD SCREENING SUMMARY
 # ============================================================
