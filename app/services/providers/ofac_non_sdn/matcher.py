@@ -186,15 +186,16 @@ def determine_sanctions_status(
     if identifier_match is True:
         return "MATCH"
 
-    score_percent = (
-        name_score * 100.0
-    )
+    score_percent = name_score * 100.0
 
     if score_percent >= 100.0:
         return "MATCH"
 
-    if score_percent >= review_threshold:
+    if score_percent >= 85.0:
         return "MATCH"
+
+    if score_percent >= review_threshold:
+        return "POSSIBLE_MATCH"
 
     return "NO_MATCH"
 

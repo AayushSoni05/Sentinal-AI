@@ -32,7 +32,7 @@ def normalize_non_sdn_record(
     record: dict
 ):
     original_name = record.get(
-        "name"
+        "original_name"
     )
 
     aliases = record.get(
