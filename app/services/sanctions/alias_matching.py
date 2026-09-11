@@ -15,6 +15,14 @@ def find_best_name_match(
     came from the canonical name or an alias.
     """
 
+    target_name = normalize_text(target_name)
+    canonical_name = normalize_text(canonical_name)
+    aliases = [
+        normalize_text(alias)
+        for alias in (aliases or [])
+        if alias
+    ]
+
     aliases = aliases or []
 
     candidates = [
