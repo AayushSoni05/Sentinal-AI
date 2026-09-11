@@ -17,6 +17,12 @@ from app.services.providers.ofac_non_sdn.provider import (
 from app.services.providers.uk_sanctions.provider import (
     UKSanctionsProvider
 )
+from app.services.providers.eu_sanctions.provider import (
+    EUSanctionsProvider
+)
+from app.services.providers.india_uapa.provider import (
+    IndiaUAPASanctionsProvider
+)
 
 # ============================================================
 # PROVIDER REGISTRY
@@ -27,6 +33,8 @@ SCREENING_PROVIDER_REGISTRY = {
     "OFAC": OFACSanctionsProvider,
     "OFAC_NON_SDN": OFACNonSDNSanctionsProvider,
     "UK": UKSanctionsProvider,
+    "EU": EUSanctionsProvider,
+    "INDIA_UAPA": IndiaUAPASanctionsProvider,
     "PEP": MockScreeningProvider,
     "ADVERSE_MEDIA": MockScreeningProvider
 }

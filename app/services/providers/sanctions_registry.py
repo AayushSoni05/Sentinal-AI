@@ -7,4 +7,6 @@ SANCTIONS_SOURCE_REGISTRY = [
     "OFAC",
     "OFAC_NON_SDN",
     "UK",
+    "EU",
+    "INDIA_UAPA",
 ]
