@@ -1,7 +1,7 @@
-# Sprint 5 — Global Sanction & Entity Screening Engine
+# Phase 3 — Sprint 5: Global Sanction & Entity Screening Engine
 
 ## 1. Sprint objective
-Build the complete sanctions screening system described in the Global Sanction & Entity Screening Engine specification. Sprint 5 includes jurisdiction/source selection, deterministic matching, alias/transliteration/phonetic evaluation, contextual attributes, LLM-assisted review, source-specific scoring, jurisdiction breakdown, Consensus Risk Index (CRI), sanctions verdicts, explainability, company and relationship-party screening, persistence, APIs, and end-to-end testing.
+Build the complete sanctions screening system described in the Global Sanction & Entity Screening Engine specification. **This is Phase 3, Sprint 5.** Sprint 5 includes jurisdiction/source selection, deterministic matching, alias/transliteration/phonetic evaluation, contextual attributes, LLM-assisted review, source-specific scoring, jurisdiction breakdown, Consensus Risk Index (CRI), sanctions verdicts, explainability, company and relationship-party screening, persistence, APIs, and end-to-end testing.
 
 ## 2. Current repository baseline
 
@@ -16,7 +16,7 @@ Build the complete sanctions screening system described in the Global Sanction &
 `app/services/providers/sanctions_registry.py` is the current active source registry and currently contains these six sources.
 
 ### Provider architecture already in place
-`app/services/providers/` contains one provider adapter per official source plus shared contracts/registries. Each provider follows the broad downloader/parser/normalizer/matcher/provider pattern. The provider layer should remain; Sprint 5 should add a higher-level sanctions engine above it rather than replacing it.
+`app/services/providers/` contains one provider adapter per official source plus shared contracts/registries. Each provider follows the broad downloader/parser/normalizer/matcher/provider pattern. The provider layer should remain; **Phase 3 Sprint 5 adds a higher-level sanctions engine above it rather than replacing it.**
 
 ### Existing investigation/screening flow
 Current flow is approximately:
@@ -91,15 +91,15 @@ Final sanctions verdict
 Explainability report
 ```
 
-## 4. Phase roadmap
+## 4. Phase 3 Sprint 5 roadmap
 
-### Phase 0 — Repository cleanup and contracts
+### Step 0 — Repository cleanup and contracts
 - Remove/ignore stale unfinished Australia provider code before it can be mistaken for an active source. The current GitHub tree still contains `app/services/providers/australia_sanctions`, while Australia is not in the active source registry.
 - Verify the active six-source registry and provider registry agree.
 - Preserve the existing company relationship screening behavior.
 - Define shared Sprint 5 schemas for target, candidate, source result, CRI result, LLM review result, and explainability output.
 
-### Phase 1 — Jurisdiction and source selection
+### Step 1 — Jurisdiction and source selection
 Build a source catalogue independent from provider implementation.
 
 Required capabilities:
@@ -110,7 +110,7 @@ Required capabilities:
 - Keep source metadata: source name, issuing authority, issuing country/region, source type, active status.
 - Do not hard-code country logic into the provider classes.
 
-### Phase 2 — Common candidate model
+### Step 2 — Common candidate model
 Create one normalized candidate representation across all providers.
 
 Required fields should support at minimum:
@@ -127,7 +127,7 @@ Required fields should support at minimum:
 
 Preserve the raw provider evidence for auditability.
 
-### Phase 3 — Deterministic entity matching
+### Step 3 — Deterministic entity matching
 Replace provider-specific `SequenceMatcher`-only logic as the primary engine with a common matcher.
 
 Required matching signals:
@@ -145,7 +145,7 @@ Required matching signals:
 
 Provider-specific matching should feed candidate evidence into the common matcher instead of independently deciding final sanctions risk.
 
-### Phase 4 — Signal scoring and penalties
+### Step 4 — Signal scoring and penalties
 Implement the Sprint 5 source-level scoring methodology.
 
 Baseline specification:
@@ -160,7 +160,7 @@ Baseline specification:
 
 Implement the scoring as explicit signals so every score is explainable.
 
-### Phase 5 — LLM-assisted contextual review
+### Step 5 — LLM-assisted contextual review
 Create the LLM reviewer defined by the supplied system prompt.
 
 The LLM receives structured target + official candidate evidence, not an ungrounded name-only question.
@@ -173,7 +173,7 @@ Required responsibilities:
 - Return strict structured JSON.
 - Never become the authoritative source of sanctions data; official provider evidence remains the source of record.
 
-### Phase 6 — Source/jurisdiction result model
+### Step 6 — Source/jurisdiction result model
 Every candidate/source result must preserve:
 - source name
 - issuing country/region
@@ -191,7 +191,7 @@ Required confidence tiers:
 - MEDIUM
 - LOW
 
-### Phase 7 — Consensus Risk Index (CRI)
+### Step 7 — Consensus Risk Index (CRI)
 Build a dedicated consensus engine.
 
 Hard requirements:
@@ -203,7 +203,7 @@ Hard requirements:
 
 Important: the current prompt references a specific CRI formula but does not include the mathematical formula itself. Do not invent or silently substitute a formula. Keep the CRI calculation isolated until the exact execution formula is defined.
 
-### Phase 8 — Final sanctions verdict and hard overrides
+### Step 8 — Final sanctions verdict and hard overrides
 Map CRI and source evidence to:
 - `FLAGGED_HIGH_RISK`
 - `POTENTIAL_MATCH_REVIEW`
@@ -211,7 +211,7 @@ Map CRI and source evidence to:
 
 Add explicit hard overrides for critical sanctions findings so a consensus calculation cannot dilute a confirmed/authoritative match.
 
-### Phase 9 — Company and relationship screening integration
+### Step 9 — Company and relationship screening integration
 Keep the existing subject expansion behavior, but route every subject through the new Sprint 5 engine.
 
 For a company:
@@ -228,7 +228,7 @@ Each subject is evaluated independently against the applicable sources.
 
 The external response remains a flat `screening[]` structure, while the consensus engine keeps the internal grouping needed for jurisdiction/source analysis.
 
-### Phase 10 — Database and API model changes
+### Step 10 — Database and API model changes
 Extend the persistence layer as required to store Sprint 5 outputs without destroying the current raw evidence.
 
 Potential additions include:
@@ -247,7 +247,7 @@ Potential additions include:
 
 Do not remove existing raw `evidence`, source UID, subject identity, or relationship information.
 
-### Phase 11 — API redesign
+### Step 11 — API redesign
 Upgrade the existing investigation screening endpoints to return the Sprint 5 structure while preserving compatibility where practical.
 
 Target JSON shape:
@@ -273,7 +273,7 @@ Target JSON shape:
 
 For investigations with multiple company relationships, keep the existing flat screening rows and attach subject/relationship context to every result.
 
-### Phase 12 — End-to-end testing
+### Step 12 — End-to-end testing
 Build deterministic test cases for:
 - exact sanctioned name
 - exact alias
@@ -301,7 +301,7 @@ Regression cases already observed during development must remain tests, includin
 - CloudWalk / OFAC Non-SDN parser and exact entity identification
 - EU XML parsing and multilingual alias preservation
 
-## 5. Locked architecture decisions
+## 5. Locked architecture decisions for Phase 3 Sprint 5
 - Keep `app/services/providers/` as the official-source adapter layer.
 - Add a separate `app/services/sanctions/` engine above the providers.
 - Do not let one provider's raw fuzzy score become the final overall sanctions risk.
@@ -310,7 +310,7 @@ Regression cases already observed during development must remain tests, includin
 - Keep provider evidence and provenance for auditability.
 - Screen company + relationship parties independently.
 - One overall sanctions decision per screening target/consensus context, not one provider-specific overall decision.
-- Sprint 5 owns the complete sanctions system, including LLM review and CRI.
+- **Phase 3 Sprint 5 owns the complete sanctions system, including LLM review and CRI.**
 
 ## 6. Known current-state gaps observed in the pushed repository
 - The active sanctions source registry is static and contains six sources.
@@ -320,7 +320,7 @@ Regression cases already observed during development must remain tests, includin
 - Company subject expansion already exists and is the correct starting point for relationship-aware Sprint 5 integration.
 - The current GitHub tree still contains an unfinished `australia_sanctions` directory even though Australia is not active in the sanctions registry; clean this up before Sprint 5 implementation begins.
 
-## 7. Sprint 5 completion criteria
+## 7. Phase 3 Sprint 5 completion criteria
 Sprint 5 is complete only when:
 1. A target can be screened against the correct global + jurisdiction-specific sources.
 2. Every provider candidate is normalized into one common candidate structure.
