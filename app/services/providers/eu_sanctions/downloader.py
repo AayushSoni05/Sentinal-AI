@@ -23,5 +23,5 @@ def download_eu_sanctions_list():
     )
 
     response.raise_for_status()
-    
+
     return response.content
