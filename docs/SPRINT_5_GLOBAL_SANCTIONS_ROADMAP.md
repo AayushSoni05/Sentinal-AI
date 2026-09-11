@@ -44,17 +44,19 @@ Add a separate sanctions engine layer:
 ```text
 app/services/sanctions/
     __init__.py
-    schemas.py
-    jurisdiction_resolver.py
+    models.py
+    source_models.py
+    source_catalog.py
+    jurisdiction.py
     source_selector.py
-    candidate_engine.py
-    entity_matcher.py
-    phonetic_matcher.py
-    attribute_evaluator.py
-    llm_reviewer.py
-    consensus_engine.py
-    explainability.py
-    screening_orchestrator.py
+    candidate.py
+    entity_matcher/
+    phonetic_matcher/
+    attribute_evaluator/
+    llm_reviewer/
+    consensus_engine/
+    explainability/
+    screening_orchestrator/
 ```
 
 Conceptual flow:
@@ -66,9 +68,9 @@ Company + relationship subjects
         ↓
 Country / jurisdiction resolution
         ↓
-Applicable source selection
+Applicable official source catalogue
         ↓
-Existing official providers
+Global provider framework / source adapter
         ↓
 Candidate normalization
         ↓
@@ -98,19 +100,63 @@ Explainability report
 - Verify the active six-source registry and provider registry agree.
 - Preserve the existing company relationship screening behavior.
 - Define shared Sprint 5 schemas for target, candidate, source result, CRI result, LLM review result, and explainability output.
+- Build and verify the common deterministic matching foundation before changing live provider integration.
+- CRI execution formula is locked as:
 
-### Step 1 — Jurisdiction and source selection
-Build a source catalogue independent from provider implementation.
+```text
+CRI = [1 - Π(1 - (S_i × W_i))] × 100
+```
+
+where each `S_i` is the normalized source-level score and `W_i` is its explicit source weight. The CRI must not use simple average or simple maximum.
+
+- Build the foundation so applicable official sources can remain represented even when Sentinel AI does not yet have a provider adapter.
+
+### Step 1 — Global official-source provider framework **(LOCKED)**
+Sprint 5 is intended to provide **country-agnostic sanctions-provider capability**, not a separate hardcoded architecture per country.
+
+Required architecture:
+
+```text
+Country / jurisdiction
+        ↓
+Verified official-source catalogue
+        ↓
+Applicable source records
+        ↓
+Provider capability lookup
+        ↓
+Generic official-source provider framework
+        ↓
+Source-specific adapter only where necessary
+        ↓
+Common SanctionsCandidate
+        ↓
+Common matching engine
+```
+
+Rules:
+- Do **not** build the system as a growing list of unrelated `SingaporeProvider`, `JapanProvider`, `FranceProvider`, etc. classes when a common adapter can handle the official source format.
+- A new jurisdiction should normally require source registration/configuration plus an adapter only when the official source format or access mechanism is materially different.
+- The source catalogue must be independent from provider implementation status.
+- An applicable source with no implemented adapter must remain visible as `NOT_IMPLEMENTED`; it must never be silently discarded.
+- Maintain provenance: official authority, official source/list name, issuing jurisdiction, source URL/reference, retrieval metadata, source UID/list UID where available.
+- Keep `app/services/providers/` as the official-source adapter layer.
+- Use `app/services/sanctions/` for jurisdiction resolution, common matching, scoring, consensus, verdicts, and explainability.
+
+### Step 2 — Jurisdiction and source catalogue
+Build a verified source catalogue independent from provider implementation.
 
 Required capabilities:
 - Accept one country or multiple countries/jurisdictions.
 - Normalize country names/codes.
 - Distinguish global sources from jurisdiction-specific sources.
 - Return the applicable sources for the target/investigation.
-- Keep source metadata: source name, issuing authority, issuing country/region, source type, active status.
-- Do not hard-code country logic into the provider classes.
+- Keep source metadata: source name, issuing authority, issuing country/region, source type, active status, official source reference, provider implementation status.
+- Do not hard-code country logic into provider classes.
+- Do not invent unsupported country sources; add jurisdiction-specific entries only from verified official sources.
+- The catalogue should be able to represent a real official source as `NOT_IMPLEMENTED` until its adapter is built.
 
-### Step 2 — Common candidate model
+### Step 3 — Common candidate model
 Create one normalized candidate representation across all providers.
 
 Required fields should support at minimum:
@@ -127,7 +173,7 @@ Required fields should support at minimum:
 
 Preserve the raw provider evidence for auditability.
 
-### Step 3 — Deterministic entity matching
+### Step 4 — Deterministic entity matching
 Replace provider-specific `SequenceMatcher`-only logic as the primary engine with a common matcher.
 
 Required matching signals:
@@ -145,7 +191,7 @@ Required matching signals:
 
 Provider-specific matching should feed candidate evidence into the common matcher instead of independently deciding final sanctions risk.
 
-### Step 4 — Signal scoring and penalties
+### Step 5 — Signal scoring and penalties
 Implement the Sprint 5 source-level scoring methodology.
 
 Baseline specification:
@@ -160,7 +206,7 @@ Baseline specification:
 
 Implement the scoring as explicit signals so every score is explainable.
 
-### Step 5 — LLM-assisted contextual review
+### Step 6 — LLM-assisted contextual review
 Create the LLM reviewer defined by the supplied system prompt.
 
 The LLM receives structured target + official candidate evidence, not an ungrounded name-only question.
@@ -173,7 +219,7 @@ Required responsibilities:
 - Return strict structured JSON.
 - Never become the authoritative source of sanctions data; official provider evidence remains the source of record.
 
-### Step 6 — Source/jurisdiction result model
+### Step 7 — Source/jurisdiction result model
 Every candidate/source result must preserve:
 - source name
 - issuing country/region
@@ -191,27 +237,44 @@ Required confidence tiers:
 - MEDIUM
 - LOW
 
-### Step 7 — Consensus Risk Index (CRI)
+### Step 8 — Consensus Risk Index (CRI)
 Build a dedicated consensus engine.
 
 Hard requirements:
 - Do NOT use simple average.
 - Do NOT use simple maximum.
-- Group results by issuing jurisdiction/authority.
-- Incorporate source-level evidence and confidence.
-- Compute the CRI using the exact execution formula supplied for Sprint 5.
+- Preserve explicit source weights.
+- Compute the CRI using the locked execution formula:
 
-Important: the current prompt references a specific CRI formula but does not include the mathematical formula itself. Do not invent or silently substitute a formula. Keep the CRI calculation isolated until the exact execution formula is defined.
+```text
+CRI = [1 - Π(1 - (S_i × W_i))] × 100
+```
 
-### Step 8 — Final sanctions verdict and hard overrides
+Validation requirements:
+- `S_i` must be normalized to 0.0–1.0.
+- `W_i` must be normalized to 0.0–1.0.
+- Duplicate source names must be rejected within one CRI component set.
+- Invalid score/weight values must raise validation errors rather than being silently clamped.
+
+### Step 9 — Final sanctions verdict and hard overrides
 Map CRI and source evidence to:
 - `FLAGGED_HIGH_RISK`
 - `POTENTIAL_MATCH_REVIEW`
 - `CLEAR`
 
+Current explicit default thresholds are:
+- CRI >= 85.0 -> `FLAGGED_HIGH_RISK`
+- CRI >= 65.0 -> `POTENTIAL_MATCH_REVIEW`
+- CRI < 65.0 -> `CLEAR`
+
+These thresholds must remain explicit/configurable.
+
 Add explicit hard overrides for critical sanctions findings so a consensus calculation cannot dilute a confirmed/authoritative match.
 
-### Step 9 — Company and relationship screening integration
+Current hard override rule implemented in the foundation:
+- Exact identifier match -> at minimum CRI 85.0 and `FLAGGED_HIGH_RISK`.
+
+### Step 10 — Company and relationship screening integration
 Keep the existing subject expansion behavior, but route every subject through the new Sprint 5 engine.
 
 For a company:
@@ -228,7 +291,7 @@ Each subject is evaluated independently against the applicable sources.
 
 The external response remains a flat `screening[]` structure, while the consensus engine keeps the internal grouping needed for jurisdiction/source analysis.
 
-### Step 10 — Database and API model changes
+### Step 11 — Database and API model changes
 Extend the persistence layer as required to store Sprint 5 outputs without destroying the current raw evidence.
 
 Potential additions include:
@@ -247,7 +310,7 @@ Potential additions include:
 
 Do not remove existing raw `evidence`, source UID, subject identity, or relationship information.
 
-### Step 11 — API redesign
+### Step 12 — API redesign
 Upgrade the existing investigation screening endpoints to return the Sprint 5 structure while preserving compatibility where practical.
 
 Target JSON shape:
@@ -273,7 +336,7 @@ Target JSON shape:
 
 For investigations with multiple company relationships, keep the existing flat screening rows and attach subject/relationship context to every result.
 
-### Step 12 — End-to-end testing
+### Step 13 — End-to-end testing
 Build deterministic test cases for:
 - exact sanctioned name
 - exact alias
@@ -294,23 +357,33 @@ Build deterministic test cases for:
 - jurisdiction-specific source selection
 - LLM review with structured JSON validation
 - CRI and hard-override behavior
+- applicable source with no provider adapter yet
+- generic provider onboarding for a new jurisdiction/source format
 
 Regression cases already observed during development must remain tests, including:
 - `KAIDA` / OFAC alias behavior
 - `KAIDA` / UNSC fuzzy false-positive behavior
 - CloudWalk / OFAC Non-SDN parser and exact entity identification
 - EU XML parsing and multilingual alias preservation
+- Singapore TSOFA / Mas Selamat should be used as a jurisdiction-source verification case once the official source is registered and its provider is implemented
 
 ## 5. Locked architecture decisions for Phase 3 Sprint 5
 - Keep `app/services/providers/` as the official-source adapter layer.
 - Add a separate `app/services/sanctions/` engine above the providers.
+- Build a **global, country-agnostic provider framework**, not a hardcoded one-provider-per-country architecture.
+- New jurisdictions should normally be added by registering verified official sources and using a generic adapter; create a specialized adapter only when the official source format/access mechanism requires it.
+- Separate source applicability from provider implementation status.
+- Never silently discard an applicable source because its provider is not implemented yet.
 - Do not let one provider's raw fuzzy score become the final overall sanctions risk.
 - Do not use `max()` for final consensus risk.
 - Do not use simple average for final consensus risk.
+- Use the exact CRI formula supplied for Sprint 5: `CRI = [1 - Π(1 - (S_i × W_i))] × 100`.
 - Keep provider evidence and provenance for auditability.
 - Screen company + relationship parties independently.
 - One overall sanctions decision per screening target/consensus context, not one provider-specific overall decision.
-- **Phase 3 Sprint 5 owns the complete sanctions system, including LLM review and CRI.**
+- **Phase 3 Sprint 5 owns the complete sanctions system, including provider capability, source selection, LLM review and CRI.**
+- **No sanctions-related capability is deferred to a later sprint.**
+- **These architecture decisions remain locked until Sprint 5 is formally completed.**
 
 ## 6. Known current-state gaps observed in the pushed repository
 - The active sanctions source registry is static and contains six sources.
@@ -319,16 +392,19 @@ Regression cases already observed during development must remain tests, includin
 - The current screening service directly executes all entries in `SANCTIONS_SOURCE_REGISTRY` and contains legacy provider-score-based recommendation logic.
 - Company subject expansion already exists and is the correct starting point for relationship-aware Sprint 5 integration.
 - The current GitHub tree still contains an unfinished `australia_sanctions` directory even though Australia is not active in the sanctions registry; clean this up before Sprint 5 implementation begins.
+- The new Sprint 5 foundation currently exists locally and has been exercised interactively; provider integration remains the next major workstream.
 
 ## 7. Phase 3 Sprint 5 completion criteria
 Sprint 5 is complete only when:
 1. A target can be screened against the correct global + jurisdiction-specific sources.
-2. Every provider candidate is normalized into one common candidate structure.
-3. Matching uses the Sprint 5 deterministic methodology.
-4. LLM review is grounded in official candidate evidence and produces validated JSON.
-5. Source-level scores and jurisdiction breakdown are preserved.
-6. CRI is calculated using the exact approved formula.
-7. Hard overrides work for critical findings.
-8. Company and all configured relationship parties are independently screened.
-9. Final API output contains the required consensus/source breakdown/explainability fields.
-10. Regression and end-to-end tests pass for the known false-positive and exact-match cases.
+2. A new jurisdiction can be onboarded through the global provider framework without changing the core matching engine.
+3. Every provider candidate is normalized into one common candidate structure.
+4. Matching uses the Sprint 5 deterministic methodology.
+5. LLM review is grounded in official candidate evidence and produces validated JSON.
+6. Source-level scores and jurisdiction breakdown are preserved.
+7. CRI is calculated using the exact approved formula.
+8. Hard overrides work for critical findings.
+9. Company and all configured relationship parties are independently screened.
+10. Final API output contains the required consensus/source breakdown/explainability fields.
+11. Regression and end-to-end tests pass for the known false-positive and exact-match cases.
+12. Applicable sources without adapters remain visible as unavailable rather than silently omitted.
