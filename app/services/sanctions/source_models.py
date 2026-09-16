@@ -10,6 +10,9 @@ class SanctionsSourceDefinition:
 
     source_name: str
     issuing_country: str
+    source_list_name: str | None = None
+    issuing_authority: str | None = None
+    official_source_url: str | None = None
     source_type: str = "SANCTIONS"
     global_scope: bool = False
     enabled: bool = True
