@@ -12,6 +12,7 @@ class SourceScreeningResult:
     source_name: str
     candidates_evaluated: int
     positive_matches: int
+    review_candidates: int = 0
 
     issuing_country: str = "GLOBAL"
 

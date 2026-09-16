@@ -53,6 +53,7 @@ def build_consensus_output(
                 ),
                 "matching_signals": result.matching_signals,
                 "mismatch_signals": result.mismatch_signals,
+                "review_candidates": result.review_candidates,
             }
             for result in collection.results
         ],

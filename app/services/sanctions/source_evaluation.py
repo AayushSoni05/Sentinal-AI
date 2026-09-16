@@ -21,9 +21,25 @@ class SourceEvaluation:
         return [
             evaluation
             for evaluation in self.candidates
-            if evaluation.score.confidence_tier in {"HIGH", "MEDIUM"}
+            if evaluation.score.confidence_tier == "HIGH"
         ]
 
+    @property
+    def review_candidates(self) -> list[CandidateEvaluation]:
+        return [
+            evaluation
+            for evaluation in self.candidates
+            if evaluation.score.confidence_tier == "MEDIUM"
+        ]
+
+    @property
+    def clear_candidates(self) -> list[CandidateEvaluation]:
+        return [
+            evaluation
+            for evaluation in self.candidates
+            if evaluation.score.confidence_tier == "LOW"
+        ]
+    
     @property
     def highest_scoring_match(
         self,
@@ -90,6 +106,7 @@ def build_source_screening_result(
             source_name=evaluation.source_name,
             candidates_evaluated=len(evaluation.candidates),
             positive_matches=len(evaluation.positive_matches),
+            review_candidates=len(evaluation.review_candidates),
             issuing_country="GLOBAL",
         )
 
@@ -98,6 +115,7 @@ def build_source_screening_result(
         issuing_country=highest_match.candidate.issuing_country,
         candidates_evaluated=len(evaluation.candidates),
         positive_matches=len(evaluation.positive_matches),
+        review_candidates=len(evaluation.review_candidates),
         highest_match=highest_match,
         matched_canonical_name=highest_match.candidate.canonical_name,
         matched_alias_used=highest_match.signals["name_match"][

@@ -23,6 +23,7 @@ def build_collection_summary(
                 "matched_alias_used": result.matched_alias_used,
                 "matching_signals": result.matching_signals,
                 "mismatch_signals": result.mismatch_signals,
+                "review_candidates": result.review_candidates,
             }
             for result in collection.results
         ],

@@ -13,7 +13,7 @@ class SourceScore:
     mismatch_signals: list[str]
 
 
-NAME_WEIGHT = 0.50
+NAME_WEIGHT = 1.0
 PHONETIC_WEIGHT = 0.10
 BIRTH_YEAR_WEIGHT = 0.15
 COUNTRY_WEIGHT = 0.15
