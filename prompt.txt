@@ -316,3 +316,788 @@ Work one step at a time.
  
 The immediate objective is: 
 Understand the existing provider architecture → design a common sanctions-source interface → implement sources one at a time → use real official data for testing → test Individual and Company workflows → aggregate source results → score 100 means RECOMMEND BLOCK.
+
+
+after sprint 3 phase 5
+# Sentinel AI — Phase 3 → Sprint 5
+
+## Global Sanctions Screening Engine
+
+### ROLE
+
+Act as the lead architect and engineer for Sentinel AI, an enterprise KYC/AML and due-diligence platform designed for banks, trade-finance firms, and financial institutions.
+
+Build Sprint 5 as a **global, extensible sanctions-screening engine**.
+
+Do not design Sentinel as a collection of country-specific hardcoded screening systems.
+
+The system must be capable of screening a person or legal entity against the **global sanctions-source universe configured in Sentinel**, regardless of the subject's nationality, home country, transaction country, or counterparty country.
+
+---
+
+# PRIMARY BUSINESS GOAL
+
+When Sentinel receives a person or entity for sanctions screening:
+
+```text
+Target
+  ↓
+Global sanctions-source discovery
+  ↓
+Screen against every configured official sanctions source
+  ↓
+Evaluate each source independently
+  ↓
+Produce source-level screening results
+  ↓
+Calculate matching scores
+  ↓
+Produce consensus risk
+```
+
+The user should not need to tell Sentinel:
+
+```text
+"Search India"
+"Search UK"
+"Search OFAC"
+"Search UAE"
+```
+
+The screening engine determines the configured global source universe automatically.
+
+---
+
+# IMPORTANT PRINCIPLE
+
+Do NOT use this architecture:
+
+```text
+if country == "USA":
+    use OFAC
+
+if country == "UK":
+    use UK
+
+if country == "India":
+    use India
+```
+
+Do NOT restrict sanctions screening to:
+
+* customer home country
+* transaction country
+* debtor country
+* counterparty country
+* nationality
+
+Those fields are **context and matching attributes**, not the complete sanctions-search scope.
+
+A New Zealand person in a Germany → New Zealand transaction may still be sanctioned by India, Canada, the UK, EU, US, UN, or another jurisdiction.
+
+Therefore the sanctions search must remain global.
+
+---
+
+# TARGET TYPES
+
+The engine must support:
+
+### Individual
+
+Possible attributes:
+
+```text
+name
+aliases
+date_of_birth
+birth_year
+nationality
+country_of_residence
+gender
+identifiers
+```
+
+### Legal Entity
+
+Possible attributes:
+
+```text
+legal_name
+trading_name
+aliases
+country_of_incorporation
+registered_country
+entity_type
+registration_number
+identifiers
+```
+
+---
+
+# INVESTIGATION CONTEXT
+
+Sentinel already has:
+
+```text
+Customer
+Investigation
+Person
+Legal Entity
+Entity Relationship
+```
+
+The sanctions engine must integrate with them.
+
+A customer may have:
+
+```text
+home country
+```
+
+An investigation may have:
+
+```text
+transaction country / countries
+debtor
+counterparty
+other transaction parties
+```
+
+For company customers, screening may also include:
+
+```text
+directors
+UBOs
+shareholders
+controllers
+authorized persons
+authorized signatories
+other configured relationship parties
+```
+
+Every screening subject must be treated independently.
+
+---
+
+# STEP 1 — GLOBAL SOURCE SCREENING & COVERAGE
+
+## Goal
+
+Build the global screening framework first.
+
+Do NOT focus on sophisticated score calibration yet.
+
+The goal is:
+
+```text
+Target
+  ↓
+Global source discovery
+  ↓
+All configured official sanctions sources
+  ↓
+Attempt screening against every source
+  ↓
+Return source-level status
+```
+
+Each source must internally have one of:
+
+```text
+MATCH
+POSSIBLE_MATCH
+NO_MATCH
+UNAVAILABLE
+ERROR
+```
+
+The system must distinguish:
+
+```text
+NO_MATCH
+```
+
+from:
+
+```text
+UNAVAILABLE
+```
+
+An unavailable source must never be represented as a clean result.
+
+## User-facing output
+
+Do not flood the user with hundreds of NO_MATCH records.
+
+Show primarily:
+
+```text
+Target name
+
+Source 1
+Source name
+MATCH
+
+Source 2
+Source name
+POSSIBLE_MATCH
+
+Source 3
+Source name
+MATCH
+```
+
+Also provide coverage summary:
+
+```text
+sources_discovered
+sources_checked
+matches
+possible_matches
+unavailable
+errors
+```
+
+Internally retain all source statuses for auditability.
+
+---
+
+# STEP 2 — MATCHING & SCORING ENGINE
+
+## Goal
+
+Determine how strongly a target matches a candidate from each source.
+
+Use a structured and explainable scoring system.
+
+Required signals include:
+
+### Name signals
+
+* Jaro-Winkler
+* Levenshtein
+* normalized name similarity
+* alias similarity
+* phonetic similarity
+
+### Attribute signals
+
+* birth year agreement
+* date-of-birth agreement
+* country/jurisdiction agreement
+* nationality where applicable
+* identifier agreement
+* entity-type agreement
+* gender where applicable
+
+### Mismatch signals
+
+Examples:
+
+* gender discrepancy
+* clear DOB mismatch
+* conflicting entity type
+* conflicting organizational attributes
+* other strong identity contradictions
+
+### Hard-match signal
+
+Exact identifier matches must receive special treatment.
+
+---
+
+# SCORING RULES
+
+Do NOT use:
+
+```text
+simple average
+simple maximum
+```
+
+for cross-source consensus.
+
+Source-level candidate scoring must be deterministic, explainable, validated, and testable.
+
+Scores must remain within:
+
+```text
+0.0 → 1.0
+```
+
+The system must reject invalid scores.
+
+Duplicate source records must be prevented where a source is expected to be unique.
+
+---
+
+# LLM / AI USE
+
+LLMs may be used where they genuinely improve:
+
+* interpretation of messy names
+* linguistic/alias interpretation
+* explainability
+* candidate-context interpretation
+* normalization assistance
+* ambiguous entity-name analysis
+
+However:
+
+**Do not allow an LLM to arbitrarily decide a sanctions hit without structured evidence.**
+
+The final screening decision must remain controlled by the deterministic scoring/rules framework and auditable evidence.
+
+AI should augment the engine, not make the compliance decision opaque.
+
+---
+
+# STEP 3 — GLOBAL SOURCE DISCOVERY & CONNECTOR FRAMEWORK
+
+## Goal
+
+Make the system globally extensible without hardcoding a new screening engine for every country.
+
+The source catalogue must be data-driven.
+
+A source definition should be able to contain metadata such as:
+
+```text
+source_id
+source_name
+source_list_name
+issuing_authority
+issuing_country
+region
+source_scope
+source_type
+official_source_url
+enabled
+connector_type
+implementation_status
+```
+
+Where appropriate, also store source-specific field mappings.
+
+---
+
+# CONNECTOR ARCHITECTURE
+
+Support generic connectors where possible:
+
+```text
+Generic XML connector
+Generic CSV connector
+Generic JSON connector
+Generic API connector
+```
+
+The connector should convert source records into one common internal model:
+
+```text
+SanctionsCandidate
+```
+
+The common candidate should support fields such as:
+
+```text
+source_name
+source_uid
+canonical_name
+aliases
+issuing_country
+countries
+dates_of_birth
+entity_type
+gender
+identifiers
+raw_data
+```
+
+For unusual sources where generic connectors are insufficient, allow a custom adapter.
+
+Custom adapters are the exception.
+
+Do NOT create country-specific matching engines.
+
+---
+
+# OFFICIAL SOURCE PRINCIPLE
+
+Sentinel should prefer authoritative official sanctions/designation sources.
+
+The source catalogue must distinguish:
+
+```text
+official source exists
+```
+
+from:
+
+```text
+Sentinel connector is implemented
+```
+
+An official source with no current connector must remain visible as:
+
+```text
+UNAVAILABLE / NOT_IMPLEMENTED
+```
+
+It must not silently disappear.
+
+---
+
+# SOURCE COVERAGE
+
+The global source universe is not limited to:
+
+```text
+UN
+OFAC
+UK
+EU
+India
+Singapore
+```
+
+Those are examples.
+
+Sentinel's architecture must support official national, regional, and international sanctions/designation sources across the world.
+
+The product should be able to expand its source catalogue without redesigning the screening engine.
+
+---
+
+# STEP 4 — CUSTOMER & INVESTIGATION INTEGRATION
+
+## Goal
+
+Integrate sanctions screening into Sentinel's real business workflow.
+
+Customer onboarding captures:
+
+```text
+customer
+customer type
+home country
+identity information
+```
+
+Investigation captures:
+
+```text
+customer
+transaction country / countries
+debtor
+counterparty
+other transaction parties
+```
+
+When an investigation reaches the appropriate screening stage:
+
+```text
+Customer
++
+Transaction parties
++
+Configured relationship subjects
+        ↓
+Global sanctions screening
+```
+
+The system should not require the analyst to manually choose each sanctions source.
+
+---
+
+# STEP 5 — MULTI-SUBJECT & RELATIONSHIP SCREENING
+
+## Goal
+
+Screen every relevant person/entity independently.
+
+Example:
+
+```text
+Company
+ ├── Customer
+ ├── Director A
+ ├── Director B
+ ├── UBO
+ ├── Shareholder
+ ├── Controller
+ ├── Authorized Signatory
+ ├── Debtor
+ └── Counterparty
+```
+
+Each subject must produce independent source-level screening results.
+
+Do not collapse relationship subjects into one indistinguishable result.
+
+Every result must retain:
+
+```text
+subject
+subject_type
+relationship_role
+source
+source status
+candidate
+score
+evidence
+```
+
+---
+
+# STEP 6 — CONSENSUS RISK / CRI
+
+## Goal
+
+After source-level screening is reliable, combine source evidence into one consensus risk measure.
+
+Required formula:
+
+```text
+CRI = [1 - Π(1 - (Si × Wi))] × 100
+```
+
+Where:
+
+```text
+Si = validated source match score
+Wi = source weight
+```
+
+Do not replace this with:
+
+```text
+simple average
+simple maximum
+```
+
+Validate:
+
+```text
+0 <= score <= 1
+0 <= weight <= 1
+duplicate sources rejected
+```
+
+---
+
+# DEFAULT VERDICTS
+
+Use:
+
+```text
+CRI >= 85
+→ FLAGGED_HIGH_RISK
+
+CRI >= 65
+→ POTENTIAL_MATCH_REVIEW
+
+CRI < 65
+→ CLEAR
+```
+
+These are defaults and must remain configurable.
+
+---
+
+# HARD RISK OVERRIDE
+
+If an exact identifier match is established:
+
+```text
+minimum score = 0.85
+```
+
+and:
+
+```text
+FLAGGED_HIGH_RISK
+```
+
+must be enforced.
+
+A normal low CRI must not override a confirmed exact identifier match.
+
+---
+
+# STEP 7 — EXPLAINABILITY
+
+## Goal
+
+Every source-level match must be explainable.
+
+Expose evidence such as:
+
+```text
+matched canonical name
+matched alias
+name similarity
+phonetic agreement
+birth-year agreement
+country agreement
+identifier agreement
+mismatch signals
+source
+issuing jurisdiction
+source UID
+official source reference
+screening timestamp
+```
+
+For POSSIBLE_MATCH:
+
+Explain why the candidate requires manual review.
+
+For UNAVAILABLE:
+
+Explain why the source could not be screened.
+
+---
+
+# STEP 8 — PERSISTENCE & AUDIT
+
+## Goal
+
+Persist the screening event and its evidence.
+
+Store enough information to reconstruct:
+
+```text
+who was screened
+when
+in which investigation
+which source was used
+source status
+candidate returned
+match score
+signals
+evidence
+connector status
+final consensus
+```
+
+The system must preserve historical screening results rather than only returning temporary API output.
+
+---
+
+# STEP 9 — FINAL SCREENING API
+
+## Goal
+
+Provide a clean user-facing response.
+
+Example:
+
+```text
+Name: Roman Abramovich
+
+Source: UK Sanctions List
+Result: MATCH
+Score: 0.94
+
+Source: EU Consolidated Sanctions List
+Result: MATCH
+Score: 0.91
+
+Source: India Official Sanctions List
+Result: POSSIBLE_MATCH
+Score: 0.72
+```
+
+Summary:
+
+```text
+Sources discovered: 180
+Sources checked: 172
+Matches: 2
+Possible matches: 1
+Unavailable: 8
+```
+
+NO_MATCH records remain available internally for audit but do not need to clutter the primary user interface.
+
+---
+
+# FINAL ARCHITECTURE
+
+The final system must conceptually operate as:
+
+```text
+CUSTOMER
+    ↓
+INVESTIGATION
+    ↓
+SCREENING SUBJECTS
+    ↓
+GLOBAL SOURCE DISCOVERY
+    ↓
+OFFICIAL SOURCE CONNECTORS
+    ↓
+NORMALIZED CANDIDATES
+    ↓
+COMMON MATCHING ENGINE
+    ↓
+SOURCE-LEVEL RESULTS
+    ↓
+CONSENSUS / CRI
+    ↓
+EXPLAINABILITY
+    ↓
+PERSISTENCE / AUDIT
+    ↓
+FINAL API
+```
+
+---
+
+# IMPLEMENTATION RULES
+
+1. Inspect the current repository before modifying anything.
+2. Do not assume existing code is correct.
+3. Do not create country-specific hardcoded screening logic unless technically unavoidable for an unusual source.
+4. Do not create duplicate matching engines for different providers.
+5. Reuse existing official-source downloaders/parsers where they are valid.
+6. Keep source discovery separate from provider implementation.
+7. Keep source-level scoring separate from cross-source consensus.
+8. Keep subject identity separate from transaction context.
+9. Keep customer home country separate from transaction countries.
+10. Screen every configured global source, not only transaction-country sources.
+11. Never represent an unavailable source as NO_MATCH.
+12. Preserve auditability of every source evaluation.
+13. Make changes one step at a time and verify each step before continuing.
+14. Do not modify unrelated Sentinel modules during a sanctions task.
+15. Do not declare a step complete until its behavior has been tested with actual repository code and realistic source data.
+
+---
+
+# DEFINITION OF DONE
+
+Sprint 5 is complete only when:
+
+```text
+✓ Any person/entity can enter the sanctions engine
+✓ Global source universe can be discovered/configured
+✓ Sources are not hardcoded into country-specific screening logic
+✓ Multiple source formats can be consumed
+✓ Candidates normalize into one common model
+✓ Every configured source can return MATCH/POSSIBLE_MATCH/NO_MATCH/UNAVAILABLE/ERROR
+✓ User-facing results show positive findings cleanly
+✓ Matching scores are explainable
+✓ No average/max shortcut is used for consensus
+✓ CRI is calculated correctly
+✓ Exact identifier overrides are enforced
+✓ Customer + investigation + transaction parties are supported
+✓ Company relationships can be screened independently
+✓ Results are persisted for audit
+✓ Final API provides source-by-source findings and consensus
+```
+
+## Core product statement
+
+**Sentinel AI screens every person/entity against the global sanctions-source universe configured in the platform, automatically discovers and evaluates available official sources, scores each candidate using a common explainable matching engine, and returns the sources where a MATCH or POSSIBLE_MATCH was found.**
