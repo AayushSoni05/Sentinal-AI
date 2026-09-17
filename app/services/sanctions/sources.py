@@ -98,11 +98,100 @@ SANCTIONS_SOURCE_CATALOG = [
             "api/PublicationPreview/exports/sdn.xml"
         ),
         connector_type="XML",
-        implementation_status="DISCOVERED",
+        implementation_status="IMPLEMENTED",
         xml_namespace=(
             "https://sanctionslistservice.ofac.treas.gov/"
             "api/PublicationPreview/exports/XML"
         ),
+        parser_config={
+            "records": {
+                "path": ".//sdnEntry",
+                "type_path": "sdnType",
+                "record_type_mapping": {
+                    "Individual": "PERSON",
+                    "Entity": "ENTITY",
+                    "Vessel": "VESSEL",
+                    "Aircraft": "AIRCRAFT",
+                },
+            },
+            "person": {
+                "id": "uid",
+                "name_fields": [
+                    "firstName",
+                    "lastName",
+                ],
+                "alias": {
+                    "record_path": "akaList/aka",
+                    "name_fields": [
+                        "firstName",
+                        "lastName",
+                    ],
+                },
+                "date_of_birth_path": (
+                    "dateOfBirthList/dateOfBirthItem/dateOfBirth"
+                ),
+                "identifier": {
+                    "record_path": "idList/id",
+                    "type_path": "idType",
+                    "value_path": "idNumber",
+                    "allowed_types": [
+                        "Passport",
+                        "National ID No.",
+                        "Identification Number",
+                    ],
+                },
+            },
+            "entity": {
+                "id": "uid",
+                "name_fields": [
+                    "firstName",
+                    "lastName",
+                ],
+                "alias": {
+                    "record_path": "akaList/aka",
+                    "name_fields": [
+                        "firstName",
+                        "lastName",
+                    ],
+                },
+                "identifier": {
+                    "record_path": "idList/id",
+                    "type_path": "idType",
+                    "value_path": "idNumber",
+                    "allowed_types": [
+                        "Registration Number",
+                        "Tax ID No.",
+                        "Business Registration Number",
+                        "Company Number",
+                    ],
+                },
+                "country_path": "addressList/address/country",
+            },
+            "vessel": {
+                "id": "uid",
+                "name_fields": [
+                    "lastName",
+                ],
+                "identifier": "vesselInfo/callSign",
+                "country_path": "vesselInfo/vesselFlag",
+            },
+
+            "aircraft": {
+                "id": "uid",
+                "name_fields": [
+                    "lastName",
+                ],
+                "identifier": {
+                    "record_path": "idList/id",
+                    "type_path": "idType",
+                    "value_path": "idNumber",
+                    "allowed_types": [
+                        "Aircraft Construction Number (also called L/N or S/N or F/N)",
+                        "Aircraft Manufacturer's Serial Number (MSN)",
+                    ],
+                },
+            },
+        },
     ),
 
     SanctionsSourceDefinition(

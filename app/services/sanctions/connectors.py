@@ -6,6 +6,7 @@ from app.services.sanctions.sources import (
 )
 from app.services.sanctions.screening import (
     SanctionsCandidate,
+    SourceRetrievalResult,
     SourceScreeningResult,
 )
 import requests
@@ -16,7 +17,20 @@ import xml.etree.ElementTree as ET
 # ============================================================
 
 class SanctionsSourceConnector(ABC):
+    @abstractmethod
+    def retrieve(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> SourceRetrievalResult:
+        ...
 
+    @abstractmethod
+    def load_candidates(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> list[SanctionsCandidate]:
+        ...
+    
     @abstractmethod
     def screen(
         self,
@@ -82,11 +96,7 @@ class XMLConnector(SanctionsSourceConnector):
         xml_text: str,
     ) -> list[SanctionsCandidate]:
         root = ET.fromstring(xml_text)
-        namespace = source.xml_namespace
-        if namespace:
-            ns = {"src": namespace}
-        else:
-            ns = {}
+
         config = source.parser_config
 
         if not config:
@@ -94,86 +104,265 @@ class XMLConnector(SanctionsSourceConnector):
                 f"No parser configuration defined for source: {source.source_id}"
             )
 
+        namespace = source.xml_namespace
+
+        if namespace:
+            namespaces = {"src": namespace}
+        else:
+            namespaces = {}
+
+        def qualified_path(path: str) -> str:
+            if not namespace:
+                return path
+
+            if path.startswith(".//"):
+                parts = path[3:].split("/")
+                return ".//" + "/".join(
+                    f"src:{part}" for part in parts
+                )
+
+            parts = path.split("/")
+
+            return "/".join(
+                f"src:{part}" for part in parts
+            )
+
+        def find_text(element, path: str) -> str | None:
+            return element.findtext(
+                qualified_path(path),
+                default=None,
+                namespaces=namespaces,
+            )
+
+        def find_element(element, path: str):
+            return element.find(
+                qualified_path(path),
+                namespaces=namespaces,
+            )
+
+        def find_elements(element, path: str):
+            return element.findall(
+                qualified_path(path),
+                namespaces=namespaces,
+            )
+
+        def build_name(
+            element,
+            fields: list[str],
+        ) -> str:
+            parts = []
+
+            for field in fields:
+                value = find_text(element, field)
+
+                if value and value.strip():
+                    parts.append(value.strip())
+
+            return " ".join(parts).strip()
+
+        def extract_aliases(
+            element,
+            alias_config: dict | None,
+        ) -> tuple[str, ...]:
+            if not alias_config:
+                return ()
+
+            alias_record_path = alias_config.get("record_path")
+            alias_name_fields = alias_config.get("name_fields", [])
+
+            if not alias_record_path:
+                return ()
+
+            aliases = []
+
+            for alias_record in find_elements(
+                element,
+                alias_record_path,
+            ):
+                alias_name = build_name(
+                    alias_record,
+                    alias_name_fields,
+                )
+
+                if alias_name:
+                    aliases.append(alias_name)
+
+            return tuple(aliases)
+
+        def extract_first_text(
+            element,
+            path: str | None,
+        ) -> str | None:
+            if not path:
+                return None
+
+            values = find_elements(
+                element,
+                path,
+            )
+
+            for value_element in values:
+                if value_element.text and value_element.text.strip():
+                    return value_element.text.strip()
+
+            value_element = find_element(
+                element,
+                path,
+            )
+
+            if value_element is not None and value_element.text:
+                return value_element.text.strip()
+
+            return None
+
+        def extract_identifiers(
+            element,
+            identifier_config,
+        ) -> tuple[str, ...]:
+            if not identifier_config:
+                return ()
+
+            if isinstance(identifier_config, str):
+                identifiers = []
+
+                for identifier_element in find_elements(
+                    element,
+                    identifier_config,
+                ):
+                    if (
+                        identifier_element.text
+                        and identifier_element.text.strip()
+                    ):
+                        identifiers.append(
+                            identifier_element.text.strip()
+                        )
+
+                return tuple(identifiers)
+
+            record_path = identifier_config.get("record_path")
+            type_path = identifier_config.get("type_path")
+            value_path = identifier_config.get("value_path")
+
+            allowed_types = set(
+                identifier_config.get("allowed_types", [])
+            )
+
+            if not record_path or not value_path:
+                return ()
+
+            identifiers = []
+
+            for record in find_elements(
+                element,
+                record_path,
+            ):
+                identifier_type = (
+                    find_text(record, type_path)
+                    if type_path
+                    else None
+                )
+
+                if (
+                    allowed_types
+                    and identifier_type not in allowed_types
+                ):
+                    continue
+
+                value = find_text(
+                    record,
+                    value_path,
+                )
+
+                if value and value.strip():
+                    identifiers.append(value.strip())
+
+            return tuple(identifiers)
+
         candidates: list[SanctionsCandidate] = []
 
         # ========================================================
-        # PERSON RECORDS
+        # UNIFIED RECORD SOURCES
+        # Example: OFAC sdnEntry + sdnType
         # ========================================================
 
-        person_config = config.get("person")
-        person_path = config.get("record_paths", {}).get("person")
+        record_config = config.get("records")
 
-        if person_config and person_path:
-            for individual in root.findall(
-                person_path if not namespace else person_path.replace(
-                    ".//",
-                    ".//src:",
-                    1,
-                ),
-                ns,
+        if record_config:
+            record_path = record_config["path"]
+            type_path = record_config["type_path"]
+
+            record_type_mapping = record_config.get(
+                "record_type_mapping",
+                {},
+            )
+
+            for record in find_elements(
+                root,
+                record_path,
             ):
-                data_id = individual.findtext(person_config["id"])
+                record_type = find_text(
+                    record,
+                    type_path,
+                )
 
-                name_parts = []
+                if record_type not in record_type_mapping:
+                    continue
 
-                for tag in person_config.get("name_fields", []):
-                    value = individual.findtext(tag)
+                entity_type = record_type_mapping[record_type]
 
-                    if value and value.strip():
-                        name_parts.append(value.strip())
+                subject_config = config.get(
+                    entity_type.lower()
+                )
 
-                name = " ".join(name_parts).strip()
+                if not subject_config:
+                    continue
+
+                data_id = find_text(
+                    record,
+                    subject_config["id"],
+                )
+
+                name = build_name(
+                    record,
+                    subject_config.get(
+                        "name_fields",
+                        [],
+                    ),
+                )
 
                 if not name:
                     continue
 
-                aliases = []
+                aliases = extract_aliases(
+                    record,
+                    subject_config.get("alias"),
+                )
 
-                alias_path = person_config.get("alias_path")
+                date_of_birth = extract_first_text(
+                    record,
+                    subject_config.get(
+                        "date_of_birth_path"
+                    ),
+                )
 
-                if alias_path:
-                    for alias_element in individual.findall(alias_path):
-                        if alias_element.text and alias_element.text.strip():
-                            aliases.append(alias_element.text.strip())
+                identifier_config = subject_config.get(
+                    "identifier",
+                    subject_config.get(
+                        "identifier_path"
+                    ),
+                )
 
-                nationality = None
+                identifiers = extract_identifiers(
+                    record,
+                    identifier_config,
+                )
 
-                nationality_path = person_config.get("nationality_path")
-
-                if nationality_path:
-                    nationality_element = individual.find(nationality_path)
-
-                    if (
-                        nationality_element is not None
-                        and nationality_element.text
-                    ):
-                        nationality = nationality_element.text.strip()
-
-                date_of_birth = None
-
-                dob_path = person_config.get("date_of_birth_path")
-
-                if dob_path:
-                    dob_element = individual.find(dob_path)
-
-                    if dob_element is not None and dob_element.text:
-                        date_of_birth = dob_element.text.strip()
-
-                identifiers = []
-
-                identifier_path = person_config.get("identifier_path")
-
-                if identifier_path:
-                    for identifier_element in individual.findall(
-                        identifier_path
-                    ):
-                        if (
-                            identifier_element.text
-                            and identifier_element.text.strip()
-                        ):
-                            identifiers.append(
-                                identifier_element.text.strip()
-                            )
+                country = extract_first_text(
+                    record,
+                    subject_config.get(
+                        "country_path"
+                    ),
+                )
 
                 candidates.append(
                     SanctionsCandidate(
@@ -183,56 +372,89 @@ class XMLConnector(SanctionsSourceConnector):
                             or f"{source.source_id}-{len(candidates)}"
                         ),
                         name=name,
-                        aliases=tuple(aliases),
-                        entity_type="PERSON",
+                        aliases=aliases,
+                        entity_type=entity_type,
                         date_of_birth=date_of_birth,
-                        nationality=nationality,
-                        identifiers=tuple(identifiers),
+                        country=country,
+                        identifiers=identifiers,
                         raw_data={
-                            "record_type": "INDIVIDUAL",
+                            "record_type": record_type,
                         },
                     )
                 )
 
+            return candidates
+
         # ========================================================
-        # ENTITY RECORDS
+        # SEPARATE PERSON / ENTITY RECORD SOURCES
+        # Example: UNSC
         # ========================================================
 
-        entity_config = config.get("entity")
-        entity_path = config.get("record_paths", {}).get("entity")
+        person_config = config.get("person")
+        person_path = config.get(
+            "record_paths",
+            {},
+        ).get("person")
 
-        if entity_config and entity_path:
-            for entity in root.findall(entity_path):
-                data_id = entity.findtext(entity_config["id"])
-
-                name = entity.findtext(
-                    entity_config["name_fields"][0]
+        if person_config and person_path:
+            for individual in find_elements(
+                root,
+                person_path,
+            ):
+                data_id = find_text(
+                    individual,
+                    person_config["id"],
                 )
 
-                if not name or not name.strip():
+                name = build_name(
+                    individual,
+                    person_config.get("name_fields", []),
+                )
+
+                if not name:
                     continue
 
-                aliases = []
+                aliases = extract_aliases(
+                    individual,
+                    person_config.get("alias"),
+                )
 
-                alias_path = entity_config.get("alias_path")
+                if not aliases:
+                    old_alias_path = person_config.get(
+                        "alias_path"
+                    )
 
-                if alias_path:
-                    for alias_element in entity.findall(alias_path):
-                        if alias_element.text and alias_element.text.strip():
-                            aliases.append(alias_element.text.strip())
+                    if old_alias_path:
+                        aliases = tuple(
+                            alias.text.strip()
+                            for alias in find_elements(
+                                individual,
+                                old_alias_path,
+                            )
+                            if alias.text
+                            and alias.text.strip()
+                        )
 
-                country = None
+                nationality = extract_first_text(
+                    individual,
+                    person_config.get(
+                        "nationality_path"
+                    ),
+                )
 
-                country_path = entity_config.get("country_path")
+                date_of_birth = extract_first_text(
+                    individual,
+                    person_config.get(
+                        "date_of_birth_path"
+                    ),
+                )
 
-                if country_path:
-                    country_element = entity.find(country_path)
-
-                    if (
-                        country_element is not None
-                        and country_element.text
-                    ):
-                        country = country_element.text.strip()
+                identifiers = extract_identifiers(
+                    individual,
+                    person_config.get(
+                        "identifier_path"
+                    ),
+                )
 
                 candidates.append(
                     SanctionsCandidate(
@@ -241,8 +463,79 @@ class XMLConnector(SanctionsSourceConnector):
                             data_id
                             or f"{source.source_id}-{len(candidates)}"
                         ),
-                        name=name.strip(),
-                        aliases=tuple(aliases),
+                        name=name,
+                        aliases=aliases,
+                        entity_type="PERSON",
+                        date_of_birth=date_of_birth,
+                        nationality=nationality,
+                        identifiers=identifiers,
+                        raw_data={
+                            "record_type": "INDIVIDUAL",
+                        },
+                    )
+                )
+
+        entity_config = config.get("entity")
+        entity_path = config.get(
+            "record_paths",
+            {},
+        ).get("entity")
+
+        if entity_config and entity_path:
+            for entity in find_elements(
+                root,
+                entity_path,
+            ):
+                data_id = find_text(
+                    entity,
+                    entity_config["id"],
+                )
+
+                name = build_name(
+                    entity,
+                    entity_config.get("name_fields", []),
+                )
+
+                if not name:
+                    continue
+
+                aliases = extract_aliases(
+                    entity,
+                    entity_config.get("alias"),
+                )
+
+                if not aliases:
+                    old_alias_path = entity_config.get(
+                        "alias_path"
+                    )
+
+                    if old_alias_path:
+                        aliases = tuple(
+                            alias.text.strip()
+                            for alias in find_elements(
+                                entity,
+                                old_alias_path,
+                            )
+                            if alias.text
+                            and alias.text.strip()
+                        )
+
+                country = extract_first_text(
+                    entity,
+                    entity_config.get(
+                        "country_path"
+                    ),
+                )
+
+                candidates.append(
+                    SanctionsCandidate(
+                        source_id=source.source_id,
+                        source_uid=(
+                            data_id
+                            or f"{source.source_id}-{len(candidates)}"
+                        ),
+                        name=name,
+                        aliases=aliases,
                         entity_type="ENTITY",
                         country=country,
                         raw_data={
@@ -252,6 +545,44 @@ class XMLConnector(SanctionsSourceConnector):
                 )
 
         return candidates
+
+    def retrieve(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> SourceRetrievalResult:
+        from datetime import datetime, timezone
+
+        success, _, error = self.fetch_source(source)
+
+        return SourceRetrievalResult(
+            source_id=source.source_id,
+            source_name=source.source_name,
+            available=success,
+            checked_at=datetime.now(timezone.utc),
+            message=error,
+        )
+
+    def load_candidates(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> list[SanctionsCandidate]:
+        success, xml_text, error = self.fetch_source(source)
+
+        if not success:
+            raise RuntimeError(
+                error or f"Unable to retrieve source: {source.source_id}"
+            )
+
+        if xml_text is None:
+            raise RuntimeError(
+                f"Source returned no XML data: {source.source_id}"
+            )
+
+        return self.parse_candidates(
+            source=source,
+            xml_text=xml_text,
+        )
+    
     def screen(
         self,
         subject_id: str,
@@ -276,6 +607,7 @@ class XMLConnector(SanctionsSourceConnector):
             source_name=source.source_name,
             status=SourceScreeningStatus.NO_MATCH,
             checked_at=datetime.now(timezone.utc),
+            screening_completed=False,
             message="Source retrieved successfully; matching not implemented yet.",
         )
 
