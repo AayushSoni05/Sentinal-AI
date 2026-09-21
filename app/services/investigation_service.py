@@ -30,7 +30,11 @@ from app.services.screening_service import (
     execute_screening_plan
 )
 
-from app.database.models import Person, LegalEntity
+from app.database.models import (
+    Person,
+    LegalEntity,
+    SanctionsScreeningCoverage
+)
 
 # ============================================================
 # INVESTIGATION LIFECYCLE
@@ -281,6 +285,13 @@ def get_investigation_match_review(
         db=db,
         kyc_profile_id=kyc_profile.id
     )
+    sanctions_coverage = db.query(
+        SanctionsScreeningCoverage
+    ).filter(
+        SanctionsScreeningCoverage.kyc_profile_id == kyc_profile.id
+    ).order_by(
+        SanctionsScreeningCoverage.checked_at.desc()
+    ).all()
 
     review_results = [
         {
@@ -327,6 +338,24 @@ def get_investigation_match_review(
             investigation.id,
         "status":
             investigation.status,
+        "sanctions_coverage": [
+            {
+                "id": coverage.id,
+                "subject_type": coverage.subject_type,
+                "subject_id": coverage.subject_id,
+                "relationship_role": coverage.relationship_role,
+                "status": coverage.status,
+                "sources_discovered": coverage.sources_discovered,
+                "sources_checked": coverage.sources_checked,
+                "matches": coverage.matches,
+                "possible_matches": coverage.possible_matches,
+                "no_matches": coverage.no_matches,
+                "unavailable": coverage.unavailable,
+                "errors": coverage.errors,
+                "checked_at": coverage.checked_at
+            }
+            for coverage in sanctions_coverage
+        ],
         "match_count":
             len(review_results),
         "matches":
@@ -363,6 +392,13 @@ def get_investigation_screening_results(
         db=db,
         kyc_profile_id=kyc_profile.id
     )
+    sanctions_coverage = db.query(
+        SanctionsScreeningCoverage
+    ).filter(
+        SanctionsScreeningCoverage.kyc_profile_id == kyc_profile.id
+    ).order_by(
+        SanctionsScreeningCoverage.checked_at.desc()
+    ).all()
 
     return {
         "investigation_number":
@@ -374,6 +410,25 @@ def get_investigation_screening_results(
 
         "status":
             investigation.status,
+
+        "sanctions_coverage": [
+            {
+                "id": coverage.id,
+                "subject_type": coverage.subject_type,
+                "subject_id": coverage.subject_id,
+                "relationship_role": coverage.relationship_role,
+                "status": coverage.status,
+                "sources_discovered": coverage.sources_discovered,
+                "sources_checked": coverage.sources_checked,
+                "matches": coverage.matches,
+                "possible_matches": coverage.possible_matches,
+                "no_matches": coverage.no_matches,
+                "unavailable": coverage.unavailable,
+                "errors": coverage.errors,
+                "checked_at": coverage.checked_at
+            }
+            for coverage in sanctions_coverage
+        ],
 
         "screening_results": [
             {

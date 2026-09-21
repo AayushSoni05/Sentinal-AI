@@ -3,6 +3,7 @@
 # ============================================================
 
 from uuid import uuid4
+import uuid
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.database.repository import (
      get_screening_results,
      get_latest_screening_results
 )
+from app.database.models import SanctionsScreeningCoverage
 from app.services.screening_providers import (
     MockScreeningProvider
 )
@@ -26,6 +28,11 @@ from app.services.providers.unsc.config import (
 )
 
 from app.services.sanctions.screening import evaluate_global_candidates
+
+from app.services.sanctions.screening import (
+    evaluate_global_candidates,
+    build_positive_sanctions_findings
+)
 
 # ============================================================
 # GET SCREENING RESULTS
@@ -438,32 +445,96 @@ def execute_screening_plan(
                     ),
                 )
 
+                positive_findings = build_positive_sanctions_findings(
+                    global_result
+                )
+                coverage = global_result.coverage
+                coverage_record = SanctionsScreeningCoverage(
+                    id=str(uuid.uuid4()),
+                    kyc_profile_id=kyc_profile_id,
+                    subject_type=screening_task["subject_type"],
+                    subject_id=screening_task["subject_id"],
+                    relationship_role=screening_task["relationship_role"],
+                    status=global_result.status.value,
+                    sources_discovered=str(coverage.sources_discovered),
+                    sources_checked=str(coverage.sources_checked),
+                    matches=str(coverage.matches),
+                    possible_matches=str(coverage.possible_matches),
+                    no_matches=str(coverage.no_matches),
+                    unavailable=str(coverage.unavailable),
+                    errors=str(coverage.errors),
+                    checked_at=global_result.checked_at,
+                )
+                db.add(coverage_record)
+
                 results.append({
-                    "subject_type":
-                        screening_task["subject_type"],
-
-                    "subject_id":
-                        screening_task["subject_id"],
-
-                    "name":
-                        screening_task["name"],
-
-                    "relationship_role":
-                        screening_task["relationship_role"],
-
-                    "screening_type":
-                        "SANCTIONS",
-
-                    "status":
-                        global_result.status,
-
-                    "coverage":
-                        global_result.coverage,
-
-                    "checked_at":
-                        global_result.checked_at
+                    "subject_type": screening_task["subject_type"],
+                    "subject_id": screening_task["subject_id"],
+                    "name": screening_task["name"],
+                    "relationship_role": screening_task["relationship_role"],
+                    "screening_type": "SANCTIONS",
+                    "status": global_result.status.value,
+                    "coverage": global_result.coverage,
+                    "checked_at": global_result.checked_at,
                 })
 
+                for finding in positive_findings:
+
+                    provider = finding.source_id
+
+                    result = (
+                        "MATCH"
+                        if finding.status.value == "MATCH"
+                        else "POSSIBLE_MATCH"
+                    )
+
+                    screening_result, error = save_screening_result(
+                        db=db,
+                        kyc_profile_id=kyc_profile_id,
+                        subject_type=screening_task["subject_type"],
+                        subject_id=screening_task["subject_id"],
+                        relationship_role=screening_task["relationship_role"],
+                        screening_type="SANCTIONS",
+                        provider=provider,
+                        result=result,
+                        matched_name=finding.candidate_name,
+                        match_confidence=finding.score,
+                        evidence=json.dumps({
+                            "source_id": finding.source_id,
+                            "source_name": finding.source_name,
+                            "source_uid": finding.source_uid,
+                            "issuing_country": finding.issuing_country,
+                        }),
+                        source_uid=finding.source_uid,
+                    )
+
+                    if error:
+
+                        errors.append({
+                            "screening_type": "SANCTIONS",
+                            "provider": provider,
+                            "subject_id": screening_task["subject_id"],
+                            "error": error,
+                        })
+
+                        continue
+
+                    results.append({
+                        "id": screening_result.id,
+                        "subject_type": screening_result.subject_type,
+                        "subject_id": screening_result.subject_id,
+                        "name": screening_task["name"],
+                        "relationship_role": screening_result.relationship_role,
+                        "screening_type": screening_result.screening_type,
+                        "provider": screening_result.provider,
+                        "result": screening_result.result,
+                        "matched_name": screening_result.matched_name,
+                        "match_confidence": screening_result.match_confidence,
+                        "source_uid": screening_result.source_uid,
+                        "evidence": screening_result.evidence,
+                        "checked_at": screening_result.checked_at,
+                    })
+        
             except Exception as exc:
 
                 errors.append({

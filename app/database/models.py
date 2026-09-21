@@ -713,6 +713,92 @@ class ScreeningResult(Base):
     )
 
 # ============================================================
+# SANCTIONS SCREENING COVERAGE
+# ============================================================
+
+class SanctionsScreeningCoverage(Base):
+
+    __tablename__ = "sanctions_screening_coverage"
+
+    id = Column(
+        String,
+        primary_key=True,
+        index=True
+    )
+
+    kyc_profile_id = Column(
+        String,
+        ForeignKey("kyc_profiles.id"),
+        nullable=False,
+        index=True
+    )
+
+    subject_type = Column(
+        String,
+        nullable=False
+    )
+
+    subject_id = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    relationship_role = Column(
+        String,
+        nullable=False
+    )
+
+    status = Column(
+        String,
+        nullable=False
+    )
+
+    sources_discovered = Column(
+        String,
+        nullable=False
+    )
+
+    sources_checked = Column(
+        String,
+        nullable=False
+    )
+
+    matches = Column(
+        String,
+        nullable=False
+    )
+
+    possible_matches = Column(
+        String,
+        nullable=False
+    )
+
+    no_matches = Column(
+        String,
+        nullable=False
+    )
+
+    unavailable = Column(
+        String,
+        nullable=False
+    )
+
+    errors = Column(
+        String,
+        nullable=False
+    )
+
+    checked_at = Column(
+        DateTime,
+        nullable=False
+    )
+
+    kyc_profile = relationship(
+        "KYCProfile"
+    )
+
+# ============================================================
 # INVESTIGATION
 # ============================================================
 
