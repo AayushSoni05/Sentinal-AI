@@ -126,7 +126,8 @@ def get_company_cdd_parties(
         "authorized_signatories": [],
         "shareholders": [],
         "controllers": [],
-        "ubos": []
+        "ubos": [],
+        "owners": []
     }
 
     relationship_map = {
@@ -135,7 +136,8 @@ def get_company_cdd_parties(
         "AUTHORIZED_SIGNATORY_OF": "authorized_signatories",
         "SHAREHOLDER_OF": "shareholders",
         "CONTROLS": "controllers",
-        "UBO_OF": "ubos"
+        "UBO_OF": "ubos",
+        "OWNS": "owners",
     }
 
 
@@ -256,7 +258,8 @@ def get_company_screening_subjects(
         "authorized_signatories",
         "shareholders",
         "controllers",
-        "ubos"
+        "ubos",
+        "owners"
     }
 
     role_labels = {
@@ -265,7 +268,8 @@ def get_company_screening_subjects(
         "authorized_signatories": "Authorized Signatory",
         "shareholders": "Shareholder",
         "controllers": "Controller",
-        "ubos": "UBO"
+        "ubos": "UBO",
+        "owners": "Owner",
     }
 
     for role in included_roles:

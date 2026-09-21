@@ -614,4 +614,4 @@ class XMLConnector(SanctionsSourceConnector):
 
 xml_connector = XMLConnector()
 
-register_connector("XML", xml_connector)
+register_connector("XML", XMLConnector())

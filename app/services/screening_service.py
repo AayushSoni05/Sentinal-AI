@@ -29,6 +29,12 @@ from app.services.providers.sanctions_registry import (
     SANCTIONS_SOURCE_REGISTRY
 )
 
+from app.services.sanctions.sources import (
+    get_enabled_sources
+)
+
+from app.services.sanctions.screening import evaluate_global_candidates
+
 # ============================================================
 # GET SCREENING RESULTS
 # ============================================================
@@ -103,7 +109,13 @@ SCREENING_POLICY = {
         "SANCTIONS",
         "PEP",
         "ADVERSE_MEDIA"
-    ]
+    ],
+
+    "Owner": [
+        "SANCTIONS",
+        "PEP",
+        "ADVERSE_MEDIA"
+    ],
 }
 
 # ============================================================
@@ -184,7 +196,8 @@ def check_screening_completeness(
 
         if task["screening_type"] == "SANCTIONS":
 
-            for provider_name in SANCTIONS_SOURCE_REGISTRY:
+            for source in get_enabled_sources():
+                provider_name = source.source_id
 
                 expected_tasks.add((
                     task["subject_type"],
@@ -431,36 +444,25 @@ def execute_screening_plan(
 
         if screening_type == "SANCTIONS":
 
-            sanctions_providers = SANCTIONS_SOURCE_REGISTRY
-
-            for provider_name in sanctions_providers:
-
-                provider = get_screening_provider(
-                    provider_name
-                )
+           for source in get_enabled_sources():
+                provider_name = source.source_id
 
                 try:
 
-                    provider_result = provider.screen(
-                        name=screening_task["name"],
-                        screening_type=screening_type,
-                        subject_type=screening_task[
-                            "subject_type"
-                        ],
-                        subject_id=screening_task[
-                            "subject_id"
-                        ],
-                        relationship_role=screening_task[
-                            "relationship_role"
-                        ],
-                        subject_country=screening_task.get(
-                            "subject_country"
+                    global_result = evaluate_global_candidates(
+                        subject_id=screening_task["subject_id"],
+                        subject_type=screening_task["subject_type"],
+                        subject_name=screening_task["name"],
+                        subject_identifiers=tuple(
+                            screening_task.get("subject_identifiers") or ()
                         ),
-                        subject_identifiers=screening_task.get(
-                            "subject_identifiers"
-                        )
+                        subject_countries=tuple(
+                            [screening_task["subject_country"]]
+                            if screening_task.get("subject_country")
+                            else ()
+                        ),
                     )
-
+                    
                     evidence = provider_result.get(
                         "evidence"
                     )
@@ -627,8 +629,7 @@ def execute_screening_plan(
                         "error":
                             str(exc)
                     })
-
-            continue
+                continue
 
         # ----------------------------------------------------
         # NON-SANCTIONS SCREENING

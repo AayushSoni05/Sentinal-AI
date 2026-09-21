@@ -1,1103 +1,395 @@
-I am building a FastAPI + SQLAlchemy + SQLite due-diligence platform called Sentinel AI.
+I am building a project called Sentinel AI, a KYC/AML and due-diligence platform for banks and trade-finance firms.
 
-PROJECT PURPOSE
-Sentinel AI is a KYC/AML/due-diligence platform intended for banks and trade-finance firms. It manages Customers, Persons, Legal Entities, Investigations, Entity Relationships, KYC profiles, sanctions screening, PEP screening, adverse-media screening, risk assessment, and investigation decisions.
+Tech stack:
+- Python 3.14
+- FastAPI
+- SQLAlchemy
+- SQLite currently
+- Alembic
+- VS Code
+- GitHub repository: AayushSoni05/Sentinal-AI
 
-IMPORTANT WORKING STYLE
-I am not a highly technical person, so guide me step-by-step.
-Do not assume files, functions, endpoints, schemas, or architecture that I have not shown you.
-Before asking me to modify code, inspect the code I provide and work from the actual implementation.
-Give me ONE implementation step at a time.
-After each step, wait for me to say DONE or provide the resulting output.
-Do not make multiple unrelated changes in one step.
-Do not delete existing code/files unless we have verified that they are unnecessary.
-Use PowerShell commands because I work on Windows.
-I commit and push my code to GitHub regularly, but development/testing is local-first.
-Do not require GitHub verification after every step unless necessary.
+IMPORTANT WORKING STYLE:
+- Do NOT assume anything about my codebase.
+- Inspect the actual repository/code before making decisions.
+- Work one step at a time.
+- Give me one exact change, test it, then wait for my output/DONE.
+- Do not batch multiple implementation steps.
+- Do not rewrite working architecture unnecessarily.
+- Preserve existing working functionality unless we explicitly decide to replace it.
+- I am not highly technical, so give exact file paths and exact code changes.
+- I strongly dislike assumptions or generic advice.
 
-CURRENT IDENTIFIER DESIGN
-The public/business-facing identifiers are:
+PROJECT GOAL:
+Sentinel AI should perform KYC/CDD, global sanctions screening, PEP screening, adverse-media screening, investigation management, relationship screening, risk assessment, and eventually explainable consensus risk scoring.
 
-Customer:
-CUS-YYYYMMDD-NNNNNN
+CURRENT CUSTOMER/ENTITY MODEL:
+- Customer can be Individual or Company.
+- Customer has public ID like CUS-YYYYMMDD-NNNNNN.
+- Person has public ID like PE-YYYYMMDD-NNNNNN.
+- Legal Entity has public ID like LE-YYYYMMDD-NNNNNN.
+- Investigation has public ID like INV-YYYYMMDD-NNNNNN.
+- Internal UUIDs remain database PK/FK.
+- Company relationships include people/entities connected to a LegalEntity.
 
-Person:
-PE-YYYYMMDD-NNNNNN
+COMPANY SCREENING REQUIREMENT:
+A company must be screened as:
+1. The company/legal entity itself.
+2. Every relevant relationship party independently:
+   - Directors
+   - UBOs
+   - Shareholders
+   - Controllers
+   - Authorized persons
+   - Authorized signatories
+   - Other configured relationship parties
+Each subject must be screened independently against applicable sources, while preserving the relationship role.
 
-Legal Entity:
-LE-YYYYMMDD-NNNNNN
+GLOBAL SANCTIONS REQUIREMENT — THIS IS LOCKED:
+Every person/entity must be screened across the GLOBAL sanctions-source universe configured in Sentinel.
 
-Investigation:
-INV-YYYYMMDD-NNNNNN
+Do NOT restrict sanctions screening by:
+- home country
+- nationality
+- transaction country
+- debtor country
+- counterparty country
 
-Internal UUIDs are still used internally as database primary keys and foreign keys.
-
-IMPORTANT API RULE
-Customer-facing APIs should expose CUS-... rather than internal Customer UUIDs.
-Person-facing APIs should use PE-... rather than internal Person UUIDs.
-LegalEntity-facing APIs should use LE-... rather than internal LegalEntity UUIDs.
-Investigation-facing APIs should use INV-....
-
-Internal UUIDs may remain inside the database and internal service logic where required.
-
-CURRENT ARCHITECTURE
-Customer:
-- A Customer can be Individual or Company.
-- Individual Customer is linked internally to a Person.
-- Company Customer is linked internally to a LegalEntity.
-- Individual Customers cannot access the company relationship endpoint.
-
-Standalone entities:
-- Person can be created independently through POST /persons.
-- LegalEntity can be created independently through POST /legal-entities.
-- A related Person or LegalEntity does NOT need to be a Customer.
-- This is important: do not create Customers merely to represent related parties.
-
-ENTITY RELATIONSHIPS
-Company relationship endpoint:
-
-POST /customers/{customer_number}/relationships
-
-The source can be:
-- Person via from_person_number = PE-...
-- LegalEntity via from_legal_entity_number = LE-...
-
-The target is the Company's internally linked LegalEntity, resolved from the CUS-... customer number.
-
-Internally relationships store UUID foreign keys:
-- from_person_id
-- from_legal_entity_id
-- to_legal_entity_id
-
-But API responses should use:
-- from_person_number
-- from_legal_entity_number
-- to_customer_number
-
-Current supported relationship types include:
-- OWNS
-- CONTROLS
-- DIRECTOR_OF
-- AUTHORIZED_PERSON_OF
-- AUTHORIZED_SIGNATORY_OF
-- SHAREHOLDER_OF
-- UBO_OF
-
-Duplicate identical relationships should be rejected.
-
-GET:
-GET /customers/{customer_number}/relationships
-
-This returns the company's relationships using business-facing identifiers.
-
-SCREENING
-All screening is investigation-based.
-
-The main screening endpoint is:
-
-POST /investigations/{investigation_number}/screening
-
-Screening results are retrieved using:
-
-GET /investigations/{investigation_number}/screening-results
-
-There is also investigation review/decision functionality.
-
-For a Company investigation, screening must include:
-1. The company/legal entity itself
-2. Relationship parties configured for the company
-
-Relationship roles include:
-- UBO
-- Director
-- Shareholder
-- Controller
-- Authorized Person
-- Authorized Signatory
-
-For an Individual Customer:
-- Screen the individual itself.
-
-For a Company:
-- Screen the company itself separately
-- Screen each relevant relationship party separately
-
-Screening results should preserve:
-- subject_type
-- internal subject_id
-- public subject_number (PE-... or LE-...)
-- relationship_role
-- screening_type
-- provider/source
-- result
-- match confidence
-- source UID
-- country match
-- identifier match
-- match strength
-- evidence strength
-- evidence
-- adverse media fields where applicable
-
-Current screening types:
-- SANCTIONS
-- PEP
-- ADVERSE_MEDIA
-
-Current system already has a working OFAC provider.
-
-CURRENT SCREENING BEHAVIOR
-The company screening subject builder includes the LegalEntity itself as:
-relationship_role = "Customer"
-
-Then it adds related parties according to relationship type.
-
-The screening system already successfully screened:
-- Company/legal entity itself
-- LegalEntity shareholder
-- Person UBO
-
-and returned separate screening tasks/results.
-
-CURRENT TESTING RULE
-Do NOT use fake sanctioned identities merely to force a MATCH.
-
-For Sprint 4 testing:
-- Use real records from official sanctions lists.
-- We can create legitimate local test customers/persons/legal entities, but the identity used to test a sanctions MATCH must correspond to an actual official listed party.
-- We will test both Individual and Company customers.
-- Company testing must include the company itself and relationship parties.
-
-SPRINT 4 — MULTI-SOURCE SANCTIONS SCREENING
-We are now starting Phase 3 Sprint 4.
-
-The purpose of Sprint 4 is to move from the existing OFAC-only sanctions capability to a multi-source sanctions screening engine.
-
-The final source set should be treated as:
-
-CORE / INTERNATIONAL:
-1. UN Security Council Consolidated List
-   Official:
-   https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list
-
-MAJOR JURISDICTION:
-2. OFAC SDN List
-   Official:
-   https://ofac.treasury.gov/sanctions-list-service
-
-3. OFAC Consolidated Non-SDN Lists
-   Official:
-   https://ofac.treasury.gov/sanctions-list-service
-
-4. UK Sanctions List (UKSL)
-   Official:
-   https://www.gov.uk/government/publications/the-uk-sanctions-list
-
-5. EU Consolidated Financial Sanctions List
-   Official:
-   https://finance.ec.europa.eu/eu-and-world/sanctions-restrictive-measures/overview-sanctions-and-related-resources_en
-
-INDIA-SPECIFIC:
-6. India Ministry of Home Affairs / UAPA designated lists
-   Official:
-   https://www.mha.gov.in/en/divisionofmha/counter-terrorism-and-counter-radicalization-division
-
-Do NOT attempt to implement every country's national sanctions list at this stage.
-
-Architecture should be extensible so additional country-specific sources can be plugged in later without redesigning the screening engine.
-
-Do NOT treat FATF grey/black lists as sanctions lists. They represent jurisdictional AML/CFT risk and should remain conceptually separate from sanctions screening.
-
-SOURCE-BY-SOURCE SCREENING REQUIREMENT
-Every source must produce its own result.
+Those are matching/context attributes, NOT the screening scope.
 
 Example:
-
-Subject
-├── UN → MATCH
-├── OFAC_SDN → NO_MATCH
-├── OFAC_NON_SDN → NO_MATCH
-├── UK → MATCH
-├── EU → NO_MATCH
-└── INDIA_MHA → NO_MATCH
-
-Do not overwrite results from one source with another source.
-Preserve source provenance.
-
-The architecture should ideally move toward something like:
-
-SanctionsSource
-    ↓
-download
-    ↓
-parse
-    ↓
-normalize
-    ↓
-match
-    ↓
-ScreeningResult
-
-Each source provider should implement a common interface/contract.
-
-SCORING REQUIREMENT
-The existing risk/recommendation engine should aggregate the source results.
-
-User requirement:
-
-If the final calculated score reaches 100:
-→ RECOMMEND BLOCK
-
-Sentinel recommends the decision; it should not automatically modify customer status just because the score is 100.
-
-Do not assume that every weak match immediately equals score 100.
-The existing matching/evidence/scoring logic should determine the final score.
-
-TESTING REQUIREMENT FOR SPRINT 4
-Test cases must include:
-
-1. Individual clean person
-   All sanctions sources → NO_MATCH
-
-2. Individual real sanctioned person
-   Example:
-   Source 1 → MATCH
-   Source 2 → NO_MATCH
-   Source 3 → MATCH
-   etc.
-   Then verify scoring.
-
-3. Company clean company
-   Company itself → source-by-source screening
-   Relationship parties → source-by-source screening
-
-4. Company with real sanctioned relationship party
-   Example:
-   Company → NO_MATCH
-   UBO → MATCH on one or more sources
-   Director → NO_MATCH
-   Shareholder → NO_MATCH
-   etc.
-
-5. Verify:
-   source-specific results are preserved
-   subject identity is preserved
-   relationship role is preserved
-   evidence is preserved
-   final score is calculated
-   score = 100 → recommendation = BLOCK
-
-IMPORTANT
-Do not start implementing source providers immediately.
-
-First inspect the current repository and identify:
-- existing OFAC provider architecture
-- downloaders
-- parsers
-- normalizers
-- matchers
-- screening service/provider interface
-- screening result persistence
-- current investigation screening execution flow
-- current risk scoring/recommendation flow
-
-Then propose the smallest safe architectural extension that can support:
-UN
-OFAC SDN
-OFAC Non-SDN
-UK
-EU
-India MHA/UAPA
-uae 
-aus
- 
- 
-Work one step at a time. 
- 
-The immediate objective is: 
-Understand the existing provider architecture → design a common sanctions-source interface → implement sources one at a time → use real official data for testing → test Individual and Company workflows → aggregate source results → score 100 means RECOMMEND BLOCK.
-
-
-after sprint 3 phase 5
-# Sentinel AI — Phase 3 → Sprint 5
-
-## Global Sanctions Screening Engine
-
-### ROLE
-
-Act as the lead architect and engineer for Sentinel AI, an enterprise KYC/AML and due-diligence platform designed for banks, trade-finance firms, and financial institutions.
-
-Build Sprint 5 as a **global, extensible sanctions-screening engine**.
-
-Do not design Sentinel as a collection of country-specific hardcoded screening systems.
-
-The system must be capable of screening a person or legal entity against the **global sanctions-source universe configured in Sentinel**, regardless of the subject's nationality, home country, transaction country, or counterparty country.
-
----
-
-# PRIMARY BUSINESS GOAL
-
-When Sentinel receives a person or entity for sanctions screening:
-
-```text
-Target
-  ↓
-Global sanctions-source discovery
-  ↓
-Screen against every configured official sanctions source
-  ↓
-Evaluate each source independently
-  ↓
-Produce source-level screening results
-  ↓
-Calculate matching scores
-  ↓
-Produce consensus risk
-```
-
-The user should not need to tell Sentinel:
-
-```text
-"Search India"
-"Search UK"
-"Search OFAC"
-"Search UAE"
-```
-
-The screening engine determines the configured global source universe automatically.
-
----
-
-# IMPORTANT PRINCIPLE
-
-Do NOT use this architecture:
-
-```text
-if country == "USA":
-    use OFAC
-
-if country == "UK":
-    use UK
-
-if country == "India":
-    use India
-```
-
-Do NOT restrict sanctions screening to:
-
-* customer home country
-* transaction country
-* debtor country
-* counterparty country
-* nationality
-
-Those fields are **context and matching attributes**, not the complete sanctions-search scope.
-
-A New Zealand person in a Germany → New Zealand transaction may still be sanctioned by India, Canada, the UK, EU, US, UN, or another jurisdiction.
-
-Therefore the sanctions search must remain global.
-
----
-
-# TARGET TYPES
-
-The engine must support:
-
-### Individual
-
-Possible attributes:
-
-```text
-name
-aliases
-date_of_birth
-birth_year
-nationality
-country_of_residence
-gender
-identifiers
-```
-
-### Legal Entity
-
-Possible attributes:
-
-```text
-legal_name
-trading_name
-aliases
-country_of_incorporation
-registered_country
-entity_type
-registration_number
-identifiers
-```
-
----
-
-# INVESTIGATION CONTEXT
-
-Sentinel already has:
-
-```text
-Customer
-Investigation
-Person
-Legal Entity
-Entity Relationship
-```
-
-The sanctions engine must integrate with them.
-
-A customer may have:
-
-```text
-home country
-```
-
-An investigation may have:
-
-```text
-transaction country / countries
-debtor
-counterparty
-other transaction parties
-```
-
-For company customers, screening may also include:
-
-```text
-directors
-UBOs
-shareholders
-controllers
-authorized persons
-authorized signatories
-other configured relationship parties
-```
-
-Every screening subject must be treated independently.
-
----
-
-# STEP 1 — GLOBAL SOURCE SCREENING & COVERAGE
-
-## Goal
-
-Build the global screening framework first.
-
-Do NOT focus on sophisticated score calibration yet.
-
-The goal is:
-
-```text
-Target
-  ↓
-Global source discovery
-  ↓
-All configured official sanctions sources
-  ↓
-Attempt screening against every source
-  ↓
-Return source-level status
-```
-
-Each source must internally have one of:
-
-```text
-MATCH
-POSSIBLE_MATCH
-NO_MATCH
-UNAVAILABLE
-ERROR
-```
-
-The system must distinguish:
-
-```text
-NO_MATCH
-```
-
-from:
-
-```text
-UNAVAILABLE
-```
-
-An unavailable source must never be represented as a clean result.
-
-## User-facing output
-
-Do not flood the user with hundreds of NO_MATCH records.
-
-Show primarily:
-
-```text
-Target name
-
-Source 1
-Source name
-MATCH
-
-Source 2
-Source name
-POSSIBLE_MATCH
-
-Source 3
-Source name
-MATCH
-```
-
-Also provide coverage summary:
-
-```text
-sources_discovered
-sources_checked
-matches
-possible_matches
-unavailable
-errors
-```
-
-Internally retain all source statuses for auditability.
-
----
-
-# STEP 2 — MATCHING & SCORING ENGINE
-
-## Goal
-
-Determine how strongly a target matches a candidate from each source.
-
-Use a structured and explainable scoring system.
-
-Required signals include:
-
-### Name signals
-
-* Jaro-Winkler
-* Levenshtein
-* normalized name similarity
-* alias similarity
-* phonetic similarity
-
-### Attribute signals
-
-* birth year agreement
-* date-of-birth agreement
-* country/jurisdiction agreement
-* nationality where applicable
-* identifier agreement
-* entity-type agreement
-* gender where applicable
-
-### Mismatch signals
-
-Examples:
-
-* gender discrepancy
-* clear DOB mismatch
-* conflicting entity type
-* conflicting organizational attributes
-* other strong identity contradictions
-
-### Hard-match signal
-
-Exact identifier matches must receive special treatment.
-
----
-
-# SCORING RULES
-
-Do NOT use:
-
-```text
-simple average
-simple maximum
-```
-
-for cross-source consensus.
-
-Source-level candidate scoring must be deterministic, explainable, validated, and testable.
-
-Scores must remain within:
-
-```text
-0.0 → 1.0
-```
-
-The system must reject invalid scores.
-
-Duplicate source records must be prevented where a source is expected to be unique.
-
----
-
-# LLM / AI USE
-
-LLMs may be used where they genuinely improve:
-
-* interpretation of messy names
-* linguistic/alias interpretation
-* explainability
-* candidate-context interpretation
-* normalization assistance
-* ambiguous entity-name analysis
-
-However:
-
-**Do not allow an LLM to arbitrarily decide a sanctions hit without structured evidence.**
-
-The final screening decision must remain controlled by the deterministic scoring/rules framework and auditable evidence.
-
-AI should augment the engine, not make the compliance decision opaque.
-
----
-
-# STEP 3 — GLOBAL SOURCE DISCOVERY & CONNECTOR FRAMEWORK
-
-## Goal
-
-Make the system globally extensible without hardcoding a new screening engine for every country.
-
-The source catalogue must be data-driven.
-
-A source definition should be able to contain metadata such as:
-
-```text
-source_id
-source_name
-source_list_name
-issuing_authority
-issuing_country
-region
-source_scope
-source_type
-official_source_url
-enabled
-connector_type
-implementation_status
-```
-
-Where appropriate, also store source-specific field mappings.
-
----
-
-# CONNECTOR ARCHITECTURE
-
-Support generic connectors where possible:
-
-```text
-Generic XML connector
-Generic CSV connector
-Generic JSON connector
-Generic API connector
-```
-
-The connector should convert source records into one common internal model:
-
-```text
-SanctionsCandidate
-```
-
-The common candidate should support fields such as:
-
-```text
-source_name
-source_uid
-canonical_name
-aliases
-issuing_country
-countries
-dates_of_birth
-entity_type
-gender
-identifiers
-raw_data
-```
-
-For unusual sources where generic connectors are insufficient, allow a custom adapter.
-
-Custom adapters are the exception.
-
-Do NOT create country-specific matching engines.
-
----
-
-# OFFICIAL SOURCE PRINCIPLE
-
-Sentinel should prefer authoritative official sanctions/designation sources.
-
-The source catalogue must distinguish:
-
-```text
-official source exists
-```
-
-from:
-
-```text
-Sentinel connector is implemented
-```
-
-An official source with no current connector must remain visible as:
-
-```text
-UNAVAILABLE / NOT_IMPLEMENTED
-```
-
-It must not silently disappear.
-
----
-
-# SOURCE COVERAGE
-
-The global source universe is not limited to:
-
-```text
-UN
-OFAC
-UK
-EU
-India
-Singapore
-```
-
-Those are examples.
-
-Sentinel's architecture must support official national, regional, and international sanctions/designation sources across the world.
-
-The product should be able to expand its source catalogue without redesigning the screening engine.
-
----
-
-# STEP 4 — CUSTOMER & INVESTIGATION INTEGRATION
-
-## Goal
-
-Integrate sanctions screening into Sentinel's real business workflow.
-
-Customer onboarding captures:
-
-```text
-customer
-customer type
-home country
-identity information
-```
-
-Investigation captures:
-
-```text
-customer
-transaction country / countries
-debtor
-counterparty
-other transaction parties
-```
-
-When an investigation reaches the appropriate screening stage:
-
-```text
-Customer
-+
-Transaction parties
-+
-Configured relationship subjects
-        ↓
-Global sanctions screening
-```
-
-The system should not require the analyst to manually choose each sanctions source.
-
----
-
-# STEP 5 — MULTI-SUBJECT & RELATIONSHIP SCREENING
-
-## Goal
-
-Screen every relevant person/entity independently.
-
-Example:
-
-```text
-Company
- ├── Customer
- ├── Director A
- ├── Director B
- ├── UBO
- ├── Shareholder
- ├── Controller
- ├── Authorized Signatory
- ├── Debtor
- └── Counterparty
-```
-
-Each subject must produce independent source-level screening results.
-
-Do not collapse relationship subjects into one indistinguishable result.
-
-Every result must retain:
-
-```text
-subject
-subject_type
-relationship_role
-source
-source status
-candidate
-score
-evidence
-```
-
----
-
-# STEP 6 — CONSENSUS RISK / CRI
-
-## Goal
-
-After source-level screening is reliable, combine source evidence into one consensus risk measure.
-
-Required formula:
-
-```text
-CRI = [1 - Π(1 - (Si × Wi))] × 100
-```
-
-Where:
-
-```text
-Si = validated source match score
-Wi = source weight
-```
-
-Do not replace this with:
-
-```text
-simple average
-simple maximum
-```
-
-Validate:
-
-```text
-0 <= score <= 1
-0 <= weight <= 1
-duplicate sources rejected
-```
-
----
-
-# DEFAULT VERDICTS
-
-Use:
-
-```text
-CRI >= 85
-→ FLAGGED_HIGH_RISK
-
-CRI >= 65
-→ POTENTIAL_MATCH_REVIEW
-
-CRI < 65
-→ CLEAR
-```
-
-These are defaults and must remain configurable.
-
----
-
-# HARD RISK OVERRIDE
-
-If an exact identifier match is established:
-
-```text
-minimum score = 0.85
-```
-
-and:
-
-```text
-FLAGGED_HIGH_RISK
-```
-
-must be enforced.
-
-A normal low CRI must not override a confirmed exact identifier match.
-
----
-
-# STEP 7 — EXPLAINABILITY
-
-## Goal
-
-Every source-level match must be explainable.
-
-Expose evidence such as:
-
-```text
-matched canonical name
-matched alias
-name similarity
-phonetic agreement
-birth-year agreement
-country agreement
-identifier agreement
-mismatch signals
-source
-issuing jurisdiction
-source UID
-official source reference
-screening timestamp
-```
-
-For POSSIBLE_MATCH:
-
-Explain why the candidate requires manual review.
-
-For UNAVAILABLE:
-
-Explain why the source could not be screened.
-
----
-
-# STEP 8 — PERSISTENCE & AUDIT
-
-## Goal
-
-Persist the screening event and its evidence.
-
-Store enough information to reconstruct:
-
-```text
-who was screened
-when
-in which investigation
-which source was used
-source status
-candidate returned
-match score
-signals
-evidence
-connector status
-final consensus
-```
-
-The system must preserve historical screening results rather than only returning temporary API output.
-
----
-
-# STEP 9 — FINAL SCREENING API
-
-## Goal
-
-Provide a clean user-facing response.
-
-Example:
-
-```text
+A New Zealand company/person involved in a Germany → New Zealand transaction must still be checked against Indian sanctions sources if that source is configured, because the subject could be sanctioned by India.
+
+USER-FACING SANCTIONS OUTPUT:
+Do not show hundreds of NO_MATCH rows.
+Show only positive findings such as:
 Name: Roman Abramovich
-
 Source: UK Sanctions List
 Result: MATCH
-Score: 0.94
+Issuing jurisdiction: UK
 
 Source: EU Consolidated Sanctions List
 Result: MATCH
-Score: 0.91
+Issuing jurisdiction: EU
 
 Source: India Official Sanctions List
 Result: POSSIBLE_MATCH
-Score: 0.72
-```
+Issuing jurisdiction: India
 
-Summary:
+Backend should still retain:
+- MATCH
+- POSSIBLE_MATCH
+- NO_MATCH
+- UNAVAILABLE
+- ERROR
 
-```text
-Sources discovered: 180
-Sources checked: 172
-Matches: 2
-Possible matches: 1
-Unavailable: 8
-```
+Coverage should also show:
+- sources discovered
+- sources checked
+- matches
+- possible matches
+- unavailable
+- errors
 
-NO_MATCH records remain available internally for audit but do not need to clutter the primary user interface.
+CURRENT SANCTIONS ARCHITECTURE:
+There is a clean package:
+app/services/sanctions/
 
----
+Files:
+- __init__.py
+- sources.py
+- screening.py
+- connectors.py
 
-# FINAL ARCHITECTURE
+Do NOT recreate the old large provider-specific sanctions prototype.
 
-The final system must conceptually operate as:
+GLOBAL SOURCE CATALOGUE:
+Currently configured sources include:
+- UNSC
+- OFAC_SDN
+- OFAC_NON_SDN
+- UK_SANCTIONS
+- EU_SANCTIONS
+- INDIA_UAPA
+- SINGAPORE_TSOFA
 
-```text
-CUSTOMER
-    ↓
-INVESTIGATION
-    ↓
-SCREENING SUBJECTS
-    ↓
-GLOBAL SOURCE DISCOVERY
-    ↓
-OFFICIAL SOURCE CONNECTORS
-    ↓
-NORMALIZED CANDIDATES
-    ↓
-COMMON MATCHING ENGINE
-    ↓
-SOURCE-LEVEL RESULTS
-    ↓
-CONSENSUS / CRI
-    ↓
-EXPLAINABILITY
-    ↓
-PERSISTENCE / AUDIT
-    ↓
-FINAL API
-```
+Generic connector types should be preferred:
+- XML
+- CSV
+- JSON/API
 
----
+Custom adapters only when generic connectors cannot handle a source.
 
-# IMPLEMENTATION RULES
+Source existence and source implementation status are separate concepts.
 
-1. Inspect the current repository before modifying anything.
-2. Do not assume existing code is correct.
-3. Do not create country-specific hardcoded screening logic unless technically unavoidable for an unusual source.
-4. Do not create duplicate matching engines for different providers.
-5. Reuse existing official-source downloaders/parsers where they are valid.
-6. Keep source discovery separate from provider implementation.
-7. Keep source-level scoring separate from cross-source consensus.
-8. Keep subject identity separate from transaction context.
-9. Keep customer home country separate from transaction countries.
-10. Screen every configured global source, not only transaction-country sources.
-11. Never represent an unavailable source as NO_MATCH.
-12. Preserve auditability of every source evaluation.
-13. Make changes one step at a time and verify each step before continuing.
-14. Do not modify unrelated Sentinel modules during a sanctions task.
-15. Do not declare a step complete until its behavior has been tested with actual repository code and realistic source data.
+CURRENT SANCTIONS TESTING:
+The global source loader currently successfully retrieved:
+- UNSC: 1011 candidates
+- OFAC_SDN: 19393 candidates
 
----
+Other configured sources are currently unavailable/unimplemented.
 
-# DEFINITION OF DONE
+Example global evaluation:
+GEDO HAMDAN produced:
+- sources discovered: 7
+- sources checked: 2
+- no matches: 2
+- unavailable: 5
 
-Sprint 5 is complete only when:
+A controlled test candidate produced:
+UNSC | United Nations Security Council | TEST-UNSC-001 | GEDO HAMDAN | MATCH | GLOBAL | 0.85
 
-```text
-✓ Any person/entity can enter the sanctions engine
-✓ Global source universe can be discovered/configured
-✓ Sources are not hardcoded into country-specific screening logic
-✓ Multiple source formats can be consumed
-✓ Candidates normalize into one common model
-✓ Every configured source can return MATCH/POSSIBLE_MATCH/NO_MATCH/UNAVAILABLE/ERROR
-✓ User-facing results show positive findings cleanly
-✓ Matching scores are explainable
-✓ No average/max shortcut is used for consensus
-✓ CRI is calculated correctly
-✓ Exact identifier overrides are enforced
-✓ Customer + investigation + transaction parties are supported
-✓ Company relationships can be screened independently
-✓ Results are persisted for audit
-✓ Final API provides source-by-source findings and consensus
-```
+CURRENT MATCHING ENGINE:
+SanctionsCandidate contains:
+- source_id
+- source_uid
+- name
+- aliases
+- entity_type
+- date_of_birth
+- gender
+- nationality
+- country
+- identifiers
+- raw_data
 
-## Core product statement
+Matching already supports:
+- normalized names
+- aliases
+- Jaro-Winkler
+- Levenshtein
+- phonetics
+- DOB
+- birth year
+- country
+- entity type
+- gender
+- identifiers
+- mismatch penalties
 
-**Sentinel AI screens every person/entity against the global sanctions-source universe configured in the platform, automatically discovers and evaluates available official sources, scores each candidate using a common explainable matching engine, and returns the sources where a MATCH or POSSIBLE_MATCH was found.**
+Candidate classification:
+- MATCH
+- POSSIBLE_MATCH
+- NO_MATCH
+
+Current thresholds:
+- MATCH >= 0.85
+- POSSIBLE_MATCH >= 0.65
+
+Exact identifier matches must produce at least 0.85.
+
+CURRENT GLOBAL RESULT TYPES:
+The sanctions engine already has:
+- ScreeningPlan
+- SourceRetrievalResult
+- SourceCandidateEvaluation
+- SourceScreeningResult
+- ScreeningCoverageSummary
+- GlobalCandidateEvaluation
+- PositiveSanctionsFinding
+
+Positive findings are flattened across sources.
+
+FUTURE CONSENSUS RISK — LOCKED:
+Do NOT use highest-score or average-score logic for final cross-source consensus.
+
+Final CRI formula:
+CRI = [1 - ∏(1 - (Si × Wi))] × 100
+
+Validate:
+- 0 <= score <= 1
+- 0 <= weight <= 1
+- duplicate-source rejection
+
+Default decision thresholds:
+- CRI >= 85 → FLAGGED_HIGH_RISK
+- CRI >= 65 → POTENTIAL_MATCH_REVIEW
+- otherwise → CLEAR
+
+Exact identifier match:
+- minimum score 0.85
+- FLAGGED_HIGH_RISK
+
+Do not implement CRI prematurely. First complete global source screening and integration.
+
+CURRENT LIVE LEGACY SCREENING ARCHITECTURE:
+There is still:
+app/services/screening_service.py
+
+This is live and must not be blindly replaced.
+
+It currently handles:
+- sanctions
+- PEP
+- adverse media
+
+It imports legacy provider infrastructure.
+
+The current execute_screening_plan():
+- builds screening tasks
+- for SANCTIONS loops through SANCTIONS_SOURCE_REGISTRY
+- calls get_screening_provider()
+- saves ScreeningResult
+- performs old recommendation logic
+- builds sanctions_assessment
+
+The old build_sanctions_assessment() currently uses the HIGHEST source score.
+That conflicts with our future CRI design.
+
+CURRENT DATABASE PERSISTENCE:
+ScreeningResult exists in app/database/models.py with fields including:
+- id
+- kyc_profile_id
+- subject_type
+- subject_id
+- relationship_role
+- source_uid
+- country_match
+- identifier_match
+- match_strength
+- evidence_strength
+- screening_type
+- provider
+- result
+- matched_name
+- match_confidence
+- evidence
+- adverse_media fields
+- checked_at
+
+Repository function:
+create_screening_result(...)
+creates ScreeningResult, db.add(), db.flush(), and does NOT commit.
+
+get_latest_screening_results() currently identifies the latest record by:
+subject_type
+subject_id
+relationship_role
+screening_type
+provider
+
+Therefore each sanctions source can potentially be represented distinctly through the provider/source value.
+
+CURRENT INVESTIGATION FLOW:
+app/services/investigation_service.py
+
+execute_investigation_screening():
+1. Gets investigation.
+2. Gets customer.
+3. Gets KYC profile.
+4. Builds screening subjects:
+   - Individual → get_individual_screening_subject()
+   - Company → get_company_screening_subjects()
+5. Calls build_screening_plan()
+6. Calls execute_screening_plan()
+7. Commits.
+8. Returns legacy sanctions_assessment:
+   - screening
+   - overall_score
+   - recommendation
+   - errors
+
+The investigation service currently imports:
+- get_screening_summary
+- build_screening_plan
+- execute_screening_plan
+from app.services.screening_service.
+
+IMPORTANT:
+We plan to integrate the new global sanctions engine into the sanctions portion of this existing flow, while preserving PEP/adverse-media behavior.
+
+CURRENT COMPANY SUBJECT BUILDER:
+app/services/company_cdd_service.py
+
+get_company_screening_subjects() includes:
+- LegalEntity itself as role Customer
+- directors
+- authorized persons
+- authorized signatories
+- shareholders
+- controllers
+- UBOs
+
+Each subject contains:
+- subject_type
+- subject_id
+- name
+- relationship_role
+- subject_country
+- subject_identifiers
+
+Current relationship mapping in get_company_cdd_parties():
+- DIRECTOR_OF → directors
+- AUTHORIZED_PERSON_OF → authorized_persons
+- AUTHORIZED_SIGNATORY_OF → authorized_signatories
+- SHAREHOLDER_OF → shareholders
+- CONTROLS → controllers
+- UBO_OF → ubos
+
+Potential issue:
+OWNS is not currently mapped there.
+
+We checked EntityRelationshipRequest:
+relationship_type is simply:
+relationship_type: str
+
+There is no enum validation in the request schema.
+
+Therefore do NOT assume which relationship types are truly allowed until inspecting the actual create_entity_relationship_service() validation.
+
+DEVELOPMENT PROCESS:
+We are currently in the architecture-inspection stage for Sprint 5: Global Sanctions Screening Engine.
+
+Sprint 5 planned structure:
+1. Global Source Screening & Coverage
+2. Matching & Scoring
+3. Global Source Discovery & Connector Framework
+4. Customer & Investigation Integration
+5. Multi-Subject & Relationship Screening
+6. Consensus Risk / CRI
+7. Explainability
+8. Persistence & Audit
+9. Final Screening API
+
+CURRENT IMMEDIATE TASK:
+Inspect the actual GitHub repository to determine:
+- create_entity_relationship_service()
+- allowed relationship types
+- current branch/revision
+- actual current versions of relevant files
+
+Use the GitHub repository directly rather than asking me to paste files unless necessary.
+
+Do NOT make any code changes yet.
+First inspect the actual repo and report:
+1. What relationship types are actually supported.
+2. Whether OWNS is supported.
+3. Exactly where relationship validation occurs.
+4. Whether the current company screening subject builder misses any supported relationship types.
+5. The safest next single code change.
+
+Then STOP and wait for my confirmation.
+
+
+
+                 SUBJECT
+                    │
+                    ▼
+          GLOBAL SOURCE DISCOVERY
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+       Source A  Source B  Source C ...
+          │         │         │
+          └─────────┼─────────┘
+                    ▼
+             SEARCH / MATCH
+                    │
+                    ▼
+          NORMALIZED FINDINGS
+                    │
+                    ▼
+       MATCH / POSSIBLE / NO MATCH
+                    │
+                    ▼
+          COVERAGE + EVIDENCE
