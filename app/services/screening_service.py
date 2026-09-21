@@ -25,14 +25,6 @@ from app.services.providers.unsc.config import (
     get_review_threshold
 )
 
-from app.services.providers.sanctions_registry import (
-    SANCTIONS_SOURCE_REGISTRY
-)
-
-from app.services.sanctions.sources import (
-    get_enabled_sources
-)
-
 from app.services.sanctions.screening import evaluate_global_candidates
 
 # ============================================================
@@ -182,10 +174,6 @@ def build_screening_plan(
 # CHECK SCREENING COMPLETENESS
 # ============================================================
 
-# ============================================================
-# CHECK SCREENING COMPLETENESS
-# ============================================================
-
 def check_screening_completeness(
     screening_plan,
     screening_results
@@ -195,16 +183,12 @@ def check_screening_completeness(
     for task in screening_plan:
 
         if task["screening_type"] == "SANCTIONS":
-
-            for source in get_enabled_sources():
-                provider_name = source.source_id
-
                 expected_tasks.add((
                     task["subject_type"],
                     task["subject_id"],
                     task["relationship_role"],
                     task["screening_type"],
-                    provider_name
+                    None
                 ))
 
         else:
@@ -221,11 +205,7 @@ def check_screening_completeness(
 
     for result in screening_results:
 
-        provider = (
-            result.provider
-            if result.screening_type == "SANCTIONS"
-            else None
-        )
+        provider = None
 
         if (
             result.subject_type is not None
@@ -437,199 +417,67 @@ def execute_screening_plan(
         screening_type = screening_task["screening_type"]
 
         # ----------------------------------------------------
-        # SANCTIONS
-        # Sprint 4.2 currently uses UNSC.
-        # OFAC remains available for Sprint 4.3.
+        # GLOBAL SANCTIONS SCREENING
         # ----------------------------------------------------
 
         if screening_type == "SANCTIONS":
 
-           for source in get_enabled_sources():
-                provider_name = source.source_id
+            try:
 
-                try:
+                global_result = evaluate_global_candidates(
+                    subject_id=screening_task["subject_id"],
+                    subject_type=screening_task["subject_type"],
+                    subject_name=screening_task["name"],
+                    subject_identifiers=tuple(
+                        screening_task.get("subject_identifiers") or ()
+                    ),
+                    subject_countries=tuple(
+                        [screening_task["subject_country"]]
+                        if screening_task.get("subject_country")
+                        else ()
+                    ),
+                )
 
-                    global_result = evaluate_global_candidates(
-                        subject_id=screening_task["subject_id"],
-                        subject_type=screening_task["subject_type"],
-                        subject_name=screening_task["name"],
-                        subject_identifiers=tuple(
-                            screening_task.get("subject_identifiers") or ()
-                        ),
-                        subject_countries=tuple(
-                            [screening_task["subject_country"]]
-                            if screening_task.get("subject_country")
-                            else ()
-                        ),
-                    )
-                    
-                    evidence = provider_result.get(
-                        "evidence"
-                    )
+                results.append({
+                    "subject_type":
+                        screening_task["subject_type"],
 
-                    if isinstance(evidence, dict):
+                    "subject_id":
+                        screening_task["subject_id"],
 
-                        evidence = json.dumps(
-                            evidence,
-                            ensure_ascii=False
-                        )
+                    "name":
+                        screening_task["name"],
 
-                    screening_result, error = (
-                        save_screening_result(
-                            db=db,
-                            kyc_profile_id=kyc_profile_id,
-                            subject_type=provider_result[
-                                "subject_type"
-                            ],
-                            subject_id=provider_result[
-                                "subject_id"
-                            ],
-                            relationship_role=provider_result[
-                                "relationship_role"
-                            ],
-                            screening_type=provider_result[
-                                "screening_type"
-                            ],
-                            provider=provider_result[
-                                "provider"
-                            ],
-                            result=provider_result[
-                                "result"
-                            ],
-                            matched_name=provider_result[
-                                "matched_name"
-                            ],
-                            match_confidence=provider_result[
-                                "match_confidence"
-                            ],
-                            evidence=evidence,
-                            source_uid=provider_result.get(
-                                "source_uid"
-                            ),
-                            country_match=provider_result.get(
-                                "country_match"
-                            ),
-                            identifier_match=provider_result.get(
-                                "identifier_match"
-                            ),
-                            match_strength=provider_result.get(
-                                "match_strength"
-                            ),
-                            evidence_strength=provider_result.get(
-                                "evidence_strength"
-                            )
-                        )
-                    )
+                    "relationship_role":
+                        screening_task["relationship_role"],
 
-                    if error:
+                    "screening_type":
+                        "SANCTIONS",
 
-                        errors.append({
-                            "screening_type":
-                                screening_type,
+                    "status":
+                        global_result.status,
 
-                            "provider":
-                                provider_name,
+                    "coverage":
+                        global_result.coverage,
 
-                            "subject_id":
-                                screening_task[
-                                    "subject_id"
-                                ],
+                    "checked_at":
+                        global_result.checked_at
+                })
 
-                            "error":
-                                error
-                        })
+            except Exception as exc:
 
-                        continue
+                errors.append({
+                    "screening_type":
+                        screening_type,
 
-                    score = float(
-                        screening_result.match_confidence or 0
-                    )
+                    "subject_id":
+                        screening_task["subject_id"],
 
-                    review_threshold = get_review_threshold()
+                    "error":
+                        str(exc)
+                })
 
-                    if score >= 100:
-                        recommendation = "BLOCK"
-
-                    elif score >= review_threshold:
-                        recommendation = "REVIEW"
-
-                    else:
-                        recommendation = "CLEAR"
-
-                    results.append({
-                        "id":
-                            screening_result.id,
-
-                        "subject_type":
-                            screening_result.subject_type,
-
-                        "subject_id":
-                            screening_result.subject_id,
-
-                        "name":
-                            screening_task["name"],
-
-                        "relationship_role":
-                            screening_result.relationship_role,
-
-                        "screening_type":
-                            screening_result.screening_type,
-
-                        "provider":
-                            screening_result.provider,
-
-                        "result":
-                            screening_result.result,
-
-                        "matched_name":
-                            screening_result.matched_name,
-
-                        "match_confidence":
-                            screening_result.match_confidence,
-
-                        "recommendation": recommendation,
-                        "review_threshold": review_threshold,
-
-                        "source_uid":
-                            screening_result.source_uid,
-
-                        "country_match":
-                            screening_result.country_match,
-
-                        "identifier_match":
-                            screening_result.identifier_match,
-
-                        "match_strength":
-                            screening_result.match_strength,
-
-                        "evidence_strength":
-                            screening_result.evidence_strength,
-
-                        "evidence":
-                            screening_result.evidence,
-
-                        "checked_at":
-                            screening_result.checked_at
-                    })
-
-                except Exception as exc:
-
-                    errors.append({
-                        "screening_type":
-                            screening_type,
-
-                        "provider":
-                            provider_name,
-
-                        "subject_id":
-                            screening_task[
-                                "subject_id"
-                            ],
-
-                        "error":
-                            str(exc)
-                    })
-                continue
+            continue
 
         # ----------------------------------------------------
         # NON-SANCTIONS SCREENING
@@ -815,9 +663,6 @@ def execute_screening_plan(
         "errors": errors,
         "sanctions_assessment": sanctions_assessment
     }
-# ============================================================
-# BUILD MULTI-SOURCE SANCTIONS ASSESSMENT
-# ============================================================
 
 # ============================================================
 # BUILD MULTI-SOURCE SANCTIONS ASSESSMENT
