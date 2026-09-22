@@ -17,6 +17,8 @@ class SanctionsSourceDefinition:
     source_scope: str
     source_type: str
     official_source_url: str
+    catalogue_resource_url: str | None = None
+    data_source_url: str | None = None
     enabled: bool = True
     connector_type: str = "UNKNOWN"
     implementation_status: str = "DISCOVERED"

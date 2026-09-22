@@ -10,12 +10,59 @@ from app.services.sanctions.screening import (
     SourceScreeningResult,
 )
 import requests
+from urllib.parse import urljoin
 import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 
 # ============================================================
 # CONNECTOR INTERFACE
 # ============================================================
 
+def resolve_data_source_url(
+    data_source_url: str | None,
+    timeout: tuple[int, int] = (3, 5),
+) -> str | None:
+    if not data_source_url:
+        return None
+
+    try:
+        response = requests.get(
+            data_source_url,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+
+        content_type = (
+            response.headers.get("content-type", "")
+            .lower()
+        )
+
+        if "text/csv" in content_type:
+            return data_source_url
+
+        if "text/html" not in content_type:
+            return data_source_url
+
+        soup = BeautifulSoup(
+            response.text,
+            "html.parser",
+        )
+
+        for link in soup.find_all("a", href=True):
+            href = link["href"]
+
+            if ".csv" in href.lower():
+                return urljoin(
+                    data_source_url,
+                    href,
+                )
+
+        return data_source_url
+
+    except requests.RequestException:
+        return data_source_url
+    except Exception:
+        return data_source_url
 class SanctionsSourceConnector(ABC):
     @abstractmethod
     def retrieve(
@@ -67,28 +114,38 @@ class XMLConnector(SanctionsSourceConnector):
         self,
         source: SanctionsSourceDefinition,
         timeout: int = 30,
-    ) -> tuple[bool, str | None, str | None]:
-        try:
-            response = requests.get(
-                source.official_source_url,
-                timeout=timeout,
+    ) -> tuple[bytes | None, str | None]:
+        source_url = source.data_source_url or source.official_source_url
+
+        if source.data_source_url:
+            source_url = resolve_data_source_url(
+                source.data_source_url,
             )
 
+        if not source_url:
+            return None, "Source URL is not configured"
+
+        try:
+            response = requests.get(
+                source_url,
+                timeout=timeout,
+            )
             response.raise_for_status()
 
-            # Validate that the response is actually XML.
-            ET.fromstring(response.content)
+            content = response.content
 
-            return True, response.text, None
+            ET.fromstring(content)
+
+            return content, None
 
         except requests.RequestException as exc:
-            return False, None, f"HTTP/connection error: {exc}"
+            return None, str(exc)
 
         except ET.ParseError as exc:
-            return False, None, f"Invalid XML response: {exc}"
+            return None, f"Invalid XML source: {exc}"
 
         except Exception as exc:
-            return False, None, f"Unexpected connector error: {exc}"
+            return None, str(exc)
 
     def parse_candidates(
         self,
@@ -611,7 +668,95 @@ class XMLConnector(SanctionsSourceConnector):
             message="Source retrieved successfully; matching not implemented yet.",
         )
 
+class CSVConnector(SanctionsSourceConnector):
+    """Generic connector for CSV-based sanctions sources."""
+
+    def fetch_source(
+        self,
+        source: SanctionsSourceDefinition,
+        timeout: int = 30,
+    ) -> tuple[str | None, str | None]:
+        source_url = source.data_source_url or source.official_source_url
+
+        if source.data_source_url:
+            resolved_url = resolve_data_source_url(
+                source.data_source_url,
+            )
+
+            if resolved_url:
+                source_url = resolved_url
+
+        if not source_url:
+            return None, "Source URL is not configured"
+
+        try:
+            response = requests.get(
+                source_url,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+
+            return response.content.decode("utf-8-sig"), None
+
+        except requests.RequestException as exc:
+            return None, str(exc)
+
+        except Exception as exc:
+            return None, str(exc)
+
+    def retrieve(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> SourceRetrievalResult:
+        from datetime import datetime, timezone
+
+        success, _, error = self.fetch_source(source)
+
+        return SourceRetrievalResult(
+            source_id=source.source_id,
+            source_name=source.source_name,
+            available=success is not None,
+            checked_at=datetime.now(timezone.utc),
+            message=error,
+        )
+
+    def load_candidates(
+        self,
+        source: SanctionsSourceDefinition,
+    ) -> list[SanctionsCandidate]:
+        raise NotImplementedError(
+            "CSV candidate parsing is not implemented yet."
+        )
+
+    def screen(
+        self,
+        subject_id: str,
+        subject_type: str,
+        source: SanctionsSourceDefinition,
+    ) -> SourceScreeningResult:
+        from datetime import datetime, timezone
+
+        success, _, error = self.fetch_source(source)
+
+        if success is None:
+            return SourceScreeningResult(
+                source_id=source.source_id,
+                source_name=source.source_name,
+                status=SourceScreeningStatus.UNAVAILABLE,
+                checked_at=datetime.now(timezone.utc),
+                message=error,
+            )
+
+        return SourceScreeningResult(
+            source_id=source.source_id,
+            source_name=source.source_name,
+            status=SourceScreeningStatus.NO_MATCH,
+            checked_at=datetime.now(timezone.utc),
+            screening_completed=False,
+            message="Source retrieved successfully; matching not implemented yet.",
+        )
 
 xml_connector = XMLConnector()
 
 register_connector("XML", XMLConnector())
+register_connector("CSV", CSVConnector())

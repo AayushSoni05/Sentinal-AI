@@ -725,6 +725,12 @@ def execute_screening_plan(
     sanctions_assessment = build_sanctions_assessment(
             results
         )
+    sanctions_coverage = [
+        result
+        for result in results
+        if result.get("screening_type") == "SANCTIONS"
+        and "coverage" in result
+    ]
 
     return {
         "total_tasks": len(screening_plan),
@@ -732,6 +738,7 @@ def execute_screening_plan(
         "failed_tasks": len(errors),
         "results": results,
         "errors": errors,
+        "sanctions_coverage": sanctions_coverage,
         "sanctions_assessment": sanctions_assessment
     }
 
@@ -745,29 +752,70 @@ def build_sanctions_assessment(
     """
     Build one flat sanctions screening array.
 
-    Every provider/source produces its own screening entry.
+    Global sanctions screening produces one status/coverage
+    entry per subject. Positive findings may additionally
+    produce source-specific entries.
 
     Overall score:
-        Highest source score.
+        Highest positive source score.
 
     No averaging.
-
-    Rules:
-        Any source score >= 100 -> BLOCK
-        Otherwise highest score >= review threshold -> REVIEW
-        Otherwise -> CLEAR
     """
 
     review_threshold = get_review_threshold()
 
     screening = []
-
     scores = []
 
     for result in screening_results:
 
         if result.get("screening_type") != "SANCTIONS":
             continue
+
+        # ----------------------------------------------------
+        # GLOBAL SANCTIONS STATUS / COVERAGE
+        # ----------------------------------------------------
+
+        if "coverage" in result:
+
+            screening.append({
+                "subject_type": result.get(
+                    "subject_type"
+                ),
+                "subject_id": result.get(
+                    "subject_id"
+                ),
+                "name": result.get(
+                    "name"
+                ),
+                "relationship_role": result.get(
+                    "relationship_role"
+                ),
+                "provider": None,
+                "result": result.get(
+                    "status"
+                ),
+                "score": 0,
+                "matched_name": None,
+                "source_uid": None,
+                "country_match": None,
+                "identifier_match": None,
+                "match_strength": None,
+                "evidence_strength": None,
+                "evidence": None,
+                "coverage": result.get(
+                    "coverage"
+                ),
+                "checked_at": result.get(
+                    "checked_at"
+                )
+            })
+
+            continue
+
+        # ----------------------------------------------------
+        # POSITIVE SOURCE FINDINGS
+        # ----------------------------------------------------
 
         try:
             score = float(
@@ -845,6 +893,7 @@ def build_sanctions_assessment(
         "recommendation": recommendation,
         "review_threshold": review_threshold
     }
+
 # ============================================================
 # BUILD SCREENING SUMMARY
 # ============================================================

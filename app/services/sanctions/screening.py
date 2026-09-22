@@ -6,8 +6,10 @@ import unicodedata
 from app.services.sanctions.sources import (
     SanctionsSourceDefinition,
     SourceScreeningStatus,
-    get_enabled_sources,
     get_source_by_id,
+)
+from app.services.sanctions.discovery import (
+    discover_sanctions_sources,
 )
 from datetime import datetime, timezone
 import jellyfish
@@ -175,6 +177,11 @@ class NameMatchEvidence:
 class CandidateMatchResult:
     candidate: SanctionsCandidate
     name_evidence: NameMatchEvidence
+    identifier_supplied: bool = False
+    date_of_birth_supplied: bool = False
+    country_supplied: bool = False
+    entity_type_supplied: bool = False
+    gender_supplied: bool = False
     identifier_match: bool = False
     date_of_birth_match: bool = False
     birth_year_match: bool = False
@@ -635,6 +642,59 @@ def build_candidate_match_score_breakdown(
         else 0.0
     )
 
+    # --------------------------------------------------------
+    # SUPPLIED ATTRIBUTES ONLY
+    # --------------------------------------------------------
+
+    supplied_scores = [
+        (name_score, weights.name)
+    ]
+
+    if match_result.identifier_supplied:
+        supplied_scores.append(
+            (identifier_score, weights.identifier)
+        )
+
+    if match_result.date_of_birth_supplied:
+        supplied_scores.append(
+            (date_of_birth_score, weights.date_of_birth)
+        )
+
+    if match_result.country_supplied:
+        supplied_scores.append(
+            (country_score, weights.country)
+        )
+
+    if match_result.entity_type_supplied:
+        supplied_scores.append(
+            (entity_type_score, weights.entity_type)
+        )
+
+    if match_result.gender_supplied:
+        supplied_scores.append(
+            (gender_score, weights.gender)
+        )
+
+    weighted_sum = sum(
+        score * weight
+        for score, weight in supplied_scores
+    )
+
+    total_weight = sum(
+        weight
+        for _, weight in supplied_scores
+    )
+
+    score = (
+        weighted_sum / total_weight
+        if total_weight > 0
+        else 0.0
+    )
+
+    # --------------------------------------------------------
+    # MISMATCH PENALTIES
+    # --------------------------------------------------------
+
     mismatch_penalty = (
         penalties.identifier
         if match_result.identifier_mismatch
@@ -668,16 +728,7 @@ def build_candidate_match_score_breakdown(
         else 0.0
     )
 
-    score = (
-        name_score * weights.name
-        + identifier_score * weights.identifier
-        + date_of_birth_score * weights.date_of_birth
-        + birth_year_score * weights.birth_year
-        + country_score * weights.country
-        + entity_type_score * weights.entity_type
-        + gender_score * weights.gender
-        - mismatch_penalty
-    )
+    score -= mismatch_penalty
 
     if match_result.identifier_match:
         score = max(score, 0.85)
@@ -767,6 +818,20 @@ def build_candidate_match_result(
     return CandidateMatchResult(
         candidate=candidate,
         name_evidence=evidence,
+        identifier_supplied=bool(subject_identifiers),
+        date_of_birth_supplied=bool(
+            subject_date_of_birth
+            and subject_date_of_birth.strip()
+        ),
+        country_supplied=bool(subject_countries),
+        entity_type_supplied=bool(
+            subject_entity_type
+            and subject_entity_type.strip()
+        ),
+        gender_supplied=bool(
+            subject_gender
+            and subject_gender.strip()
+        ),
         identifier_match=identifier_evidence,
         date_of_birth_match=date_of_birth_evidence,
         birth_year_match=birth_year_evidence,
@@ -1062,7 +1127,7 @@ def build_global_screening_plan(
     return ScreeningPlan(
         subject_id=subject_id,
         subject_type=subject_type,
-        sources=tuple(get_enabled_sources()),
+        sources=tuple(discover_sanctions_sources()),
     )
 
 

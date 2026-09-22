@@ -245,6 +245,9 @@ def execute_investigation_screening(
     "screening":
         screening_result["sanctions_assessment"]["screening"],
 
+    "sanctions_coverage":
+        screening_result.get("sanctions_coverage", []),
+
     "overall_score":
         screening_result["sanctions_assessment"]["overall_score"],
 
